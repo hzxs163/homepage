@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>我的导航</title>
+
+<!-- ========== PWA 配置 ========== -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#00b866">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<!-- ========== 图标（PWA 安装用） ========== -->
+<link rel="icon" type="image/png" sizes="72x72" href="/icons/icon-72.png">
+<link rel="icon" type="image/png" sizes="96x96" href="/icons/icon-96.png">
+<link rel="icon" type="image/png" sizes="128x128" href="/icons/icon-128.png">
+<link rel="icon" type="image/png" sizes="144x144" href="/icons/icon-144.png">
+<link rel="icon" type="image/png" sizes="152x152" href="/icons/icon-152.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="384x384" href="/icons/icon-384.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
+
+<!-- ========== 依赖库 ========== -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+<!-- ========== 样式 ========== -->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container" id="app">
+
+<!-- ==================== 登录页 ==================== -->
+<div id="loginPage">
+    <div class="login-box">
+        <h2>🔖 我的导航</h2>
+        <p class="sub">输入任意账号密码即可体验</p>
+        <div class="form-item">
+            <label>用户名</label>
+            <input type="text" id="loginUsername" placeholder="随便输" autocomplete="username">
+        </div>
+        <div class="form-item">
+            <label>密码</label>
+            <input type="password" id="loginPassword" placeholder="随便输" autocomplete="current-password">
+        </div>
+        <button class="login-btn" id="loginBtn">登 录</button>
+        <div class="login-error" id="loginError"></div>
+    </div>
+</div>
+
+<!-- ==================== 主页面 ==================== -->
+<div id="mainPage" style="display:none;">
+
+    <div class="main-header">
+        <div class="title">
+            <span class="title-line"></span>
+            我的导航
+        </div>
+        <div class="user-info">
+            <span class="sync-status" id="syncStatus">● 本地模式</span>
+            <span class="username" id="displayUsername">用户</span>
+            <span class="role-tag" id="displayRole">普通</span>
+            <button class="admin-btn" id="adminBtn" style="display:none;">👥 管理</button>
+            <button class="logout-btn" id="logoutBtn">退出</button>
+        </div>
+    </div>
+
+    <div class="btn-group">
+        <div class="top-btn-row">
+            <button class="add-btn" id="addBtn">添加网址</button>
+            <button class="refresh-btn" id="refreshBtn">测速</button>
+            <button class="import-json-btn" id="importBtn">导入</button>
+            <button class="export-json-btn" id="exportBtn">导出</button>
+            <button class="drag-lock-btn" id="dragLockBtn">🔒</button>
+            <button class="theme-toggle-btn" id="themeToggleBtn">🌞</button>
+            <input type="file" id="fileInput" accept=".json">
+        </div>
+    </div>
+
+    <div class="search-wrap">
+        <input type="text" class="search-input" id="searchInput" placeholder="输入关键词搜索站点名称/地址/标签...">
+        <button class="clear-search-btn hidden" id="clearSearchBtn">清除</button>
+    </div>
+
+    <div class="tags-filter-wrap" id="tagsFilterWrap">
+        <div class="tags-filter-title">标签筛选：</div>
+        <div class="tags-list" id="tagsList"></div>
+    </div>
+
+    <div id="siteListWrap" class="site-list-grid"></div>
+</div>
+
+<!-- ==================== 添加/编辑弹窗 ==================== -->
+<div class="modal-mask" id="addModal">
+    <div class="modal-container">
+        <div class="modal-header">
+            <h3 class="modal-title" id="modalTitle">添加新网址</h3>
+            <button class="modal-close" id="modalCloseBtn">×</button>
+        </div>
+        <div class="modal-form">
+            <div class="form-item">
+                <label>网站名称</label>
+                <input type="text" id="modalSiteName" placeholder="例如：福利吧论坛">
+            </div>
+            <div class="form-item">
+                <label>网站地址</label>
+                <input type="text" id="modalSiteUrl" placeholder="例如：https://www.example.com">
+                <button class="paste-btn" id="pasteBtn">📋 从剪贴板识别填充</button>
+            </div>
+            <div class="form-item">
+                <label>图标符号（可选）</label>
+                <input type="text" id="modalSiteIcon" placeholder="例如：⭐、🌐、🔑" maxlength="2">
+            </div>
+            <div class="form-item">
+                <label>网站标签</label>
+                <input type="text" id="modalSiteTags" placeholder="例如：福利,论坛,资源">
+                <div class="tags-select-wrap">
+                    <div class="existing-tags-list" id="existingTagsList"></div>
+                    <div class="selected-tags-list" id="selectedTagsList"></div>
+                    <div class="tags-tips">💡 点击已有标签快速选择，或手动输入新标签</div>
+                </div>
+            </div>
+            <div class="form-item">
+                <label>排序权重</label>
+                <input type="number" id="modalSiteSort" placeholder="数字越小越靠前" min="1" step="1">
+                <div class="tags-tips">💡 建议使用10的倍数（10、20、30...）</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-cancel" id="modalCancelBtn">取消</button>
+            <button class="modal-confirm" id="modalConfirmBtn">确认添加</button>
+            <button class="modal-delete" id="modalDeleteBtn" style="display:none;">删除网址</button>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 管理员弹窗 ==================== -->
+<div class="modal-mask" id="adminModal">
+    <div class="modal-container" style="max-width:600px;">
+        <div class="modal-header">
+            <h3 class="modal-title">👥 用户管理</h3>
+            <button class="modal-close" id="adminModalCloseBtn">×</button>
+        </div>
+        <div class="modal-form">
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;">
+                <input type="text" id="adminNewUser" placeholder="新用户名" style="flex:1; padding:10px 14px; border:1px solid #e8f8f0; border-radius:8px; font-size:14px; background:#fff;">
+                <input type="text" id="adminNewPass" placeholder="初始密码" style="flex:1; padding:10px 14px; border:1px solid #e8f8f0; border-radius:8px; font-size:14px; background:#fff;">
+                <button class="modal-confirm" id="adminCreateBtn" style="padding:10px 24px;">创建用户</button>
+            </div>
+            <div id="adminUserList" style="max-height:300px; overflow-y:auto;"></div>
+            <div class="tags-tips" id="adminMsg"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-cancel" id="adminModalCloseBtn2">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 返回顶部 ==================== -->
+<button class="back-to-top" id="backToTopBtn">↑</button>
+
+<!-- ==================== Toast提示 ==================== -->
+<div class="toast" id="toast"></div>
+
+<!-- ==================== JavaScript ==================== -->
+<script src="api.js"></script>
+<script src="auth.js"></script>
+<script src="app.js"></script>
+<script src="admin.js"></script>
+
+<!-- ==================== PWA: 注册 Service Worker ==================== -->
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js')
+            .then(function(reg) {
+                console.log('PWA: Service Worker 注册成功');
+            })
+            .catch(function(err) {
+                console.log('PWA: Service Worker 注册失败', err);
+            });
+    });
+}
+</script>
+
+</body>
+</html>
