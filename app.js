@@ -443,7 +443,7 @@ const frag = document.createDocumentFragment();
             iconHtml = `<div class="site-icon" style="background:#00b866;">${site.icon}</div>`;
         } else {
             const logo = getSiteLogoSync(site.url || '');
-            iconHtml = `<div class="site-icon"><img src="${logo}" alt="${site.name || '链接'}" onerror="if(this.parentElement){this.parentElement.innerHTML='🔗';this.parentElement.style.background='#00b866'}"></div>`;
+            iconHtml = `<div class="site-icon"><img src="${logo}" alt="${site.name || '链接'}" onerror="this.parentElement.innerHTML='🔗';this.parentElement.style.background='#00b866'"></div>`;
         }
 
         let tagsHtml = '';
