@@ -1776,7 +1776,7 @@ function loadSingleIcon(div, site) {
     
     // 加载图片
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    // img.crossOrigin = 'anonymous';
     img.onload = function() {
         iconEl.innerHTML = '';
         iconEl.style.background = 'transparent';
