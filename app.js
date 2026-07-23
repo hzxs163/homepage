@@ -151,15 +151,29 @@ async function loadLinks() {
             throw new Error('返回的数据不是数组');
         }
         
-        siteList = data.map(item => ({
-            id: item.id,
-            name: item.title || item.name || '未命名',
-            url: item.url || '',
-            icon: item.icon || '',
-            tags: Array.isArray(item.tags) ? item.tags : [],
-            sort: item.sort_order || item.sort || 0,
-            click_count: item.click_count || 0
-        }));
+siteList = data.map(item => {
+    // 处理 tags：可能是字符串，也可能是数组
+    let tags = item.tags || [];
+    if (typeof tags === 'string') {
+        try {
+            tags = JSON.parse(tags);
+        } catch (e) {
+            tags = [];
+        }
+    }
+    if (!Array.isArray(tags)) {
+        tags = [];
+    }
+    return {
+        id: item.id,
+        name: item.title || '未命名',
+        url: item.url || '',
+        icon: item.icon || '',
+        tags: tags,
+        sort: item.sort_order || 0,
+        click_count: item.click_count || 0
+    };
+});
         siteList.sort((a, b) => (a.sort || 0) - (b.sort || 0));
         localStorage.setItem('siteList', JSON.stringify(siteList));
         if (statusEl) {
