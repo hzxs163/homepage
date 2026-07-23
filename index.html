@@ -33,8 +33,12 @@
 
     <!-- ========== 顶栏 ========== -->
     <div class="main-header">
-        <!-- 第一行：功能按钮 + 用户菜单 -->
+        <!-- 第一行：搜索框 + 功能按钮 + 用户菜单 -->
         <div class="header-top">
+            <div class="search-wrap">
+                <input type="text" class="search-input" id="searchInput" placeholder="输入关键词搜索站点名称/地址/标签...">
+                <button class="clear-search-btn hidden" id="clearSearchBtn">清除</button>
+            </div>
             <div class="btn-group">
                 <button class="add-btn" id="addBtn">添加网址</button>
                 <button class="refresh-btn" id="refreshBtn">测速</button>
@@ -69,14 +73,6 @@
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- 第二行：搜索框 -->
-        <div class="header-bottom">
-            <div class="search-wrap">
-                <input type="text" class="search-input" id="searchInput" placeholder="输入关键词搜索站点名称/地址/标签...">
-                <button class="clear-search-btn hidden" id="clearSearchBtn">清除</button>
             </div>
         </div>
     </div>
