@@ -109,7 +109,7 @@ function hideSkeleton() {
     isLoading = false;
     const wrap = document.getElementById('siteListWrap');
     if (wrap) {
-        wrap.innerHTML = '';  // ← 关键修复：真正清空骨架屏
+        wrap.innerHTML = '';
     }
 }
 
@@ -145,35 +145,33 @@ async function loadLinks() {
 
     try {
         const data = await API.getLinks();
-        
-        // 确保 data 是数组
+
         if (!Array.isArray(data)) {
             throw new Error('返回的数据不是数组');
         }
-        
-siteList = data.map(item => {
-    // 处理 tags：可能是字符串，也可能是数组
-    let tags = item.tags || [];
-    if (typeof tags === 'string') {
-        try {
-            tags = JSON.parse(tags);
-        } catch (e) {
-            tags = [];
-        }
-    }
-    if (!Array.isArray(tags)) {
-        tags = [];
-    }
-    return {
-        id: item.id,
-        name: item.title || '未命名',
-        url: item.url || '',
-        icon: item.icon || '',
-        tags: tags,
-        sort: item.sort_order || 0,
-        click_count: item.click_count || 0
-    };
-});
+
+        siteList = data.map(item => {
+            let tags = item.tags || [];
+            if (typeof tags === 'string') {
+                try {
+                    tags = JSON.parse(tags);
+                } catch (e) {
+                    tags = [];
+                }
+            }
+            if (!Array.isArray(tags)) {
+                tags = [];
+            }
+            return {
+                id: item.id,
+                name: item.title || '未命名',
+                url: item.url || '',
+                icon: item.icon || '',
+                tags: tags,
+                sort: item.sort_order || 0,
+                click_count: item.click_count || 0
+            };
+        });
         siteList.sort((a, b) => (a.sort || 0) - (b.sort || 0));
         localStorage.setItem('siteList', JSON.stringify(siteList));
         if (statusEl) {
@@ -210,12 +208,11 @@ siteList = data.map(item => {
 // ============================================================
 
 function getAllTags() {
-    // 确保 siteList 是数组
     if (!Array.isArray(siteList)) {
         siteList = [];
         return [];
     }
-    
+
     const tagCount = {};
     siteList.forEach(site => {
         if (site.tags && Array.isArray(site.tags)) {
@@ -382,7 +379,6 @@ function initTagSortable() {
 }
 
 function getFilteredList() {
-    // 确保 siteList 是数组
     if (!Array.isArray(siteList)) {
         console.error('siteList 不是数组，重新初始化');
         siteList = [];
@@ -408,13 +404,12 @@ function getFilteredList() {
 
 function renderList() {
     if (isRendering) return;
-    
-    // 确保 siteList 是数组
+
     if (!Array.isArray(siteList)) {
         console.error('siteList 不是数组，重新初始化');
         siteList = [];
     }
-    
+
     isRendering = true;
     if (sortableInstance) {
         sortableInstance.destroy();
@@ -610,7 +605,6 @@ function showContextMenu(x, y, id, url) {
         menu.style.color = '#e5e5e5';
     }
 
-    // 确保不超出屏幕
     const rect = menu.getBoundingClientRect();
     if (x + rect.width > window.innerWidth) {
         menu.style.left = (x - rect.width) + 'px';
@@ -742,19 +736,33 @@ function initSortableDrag() {
         onEnd: async (evt) => {
             isDragging = false;
             isMouseMoving = false;
-            const filtered = getFilteredList();
-            const moved = filtered[evt.oldIndex];
-            if (!moved || !moved.id) return;
 
-            const newSort = evt.newIndex === 0
-                ? (filtered[0] ? filtered[0].sort - 10 : 10)
-                : (filtered[evt.newIndex - 1].sort + 10);
+            const wrap = document.getElementById('siteListWrap');
+            if (!wrap) return;
+
+            const items = wrap.querySelectorAll('.site-item');
+
+            const newOrder = [];
+            items.forEach(el => {
+                const id = parseInt(el.dataset.id);
+                const site = siteList.find(s => s.id === id);
+                if (site) newOrder.push(site);
+            });
+
+            newOrder.forEach((site, index) => {
+                site.sort = (index + 1) * 10;
+            });
+
+            siteList.sort((a, b) => a.sort - b.sort);
 
             try {
-                await API.updateSort(moved.id, newSort);
-                await loadLinks();
+                for (const site of newOrder) {
+                    await API.updateSort(site.id, site.sort);
+                }
+                renderList();
+                showToast('排序已保存');
             } catch (err) {
-                showToast('排序保存失败');
+                showToast('排序保存失败，重新加载数据');
                 await loadLinks();
             }
         }
@@ -1165,10 +1173,8 @@ async function handleFileImport(event) {
             const data = JSON.parse(e.target.result);
             if (!Array.isArray(data)) { showToast('格式错误：需要数组'); return; }
 
-            // 显示加载状态
             showToast(`正在导入 ${data.length} 条数据...`);
 
-            // 转换数据格式，准备批量导入
             const importData = data
                 .filter(item => item.name && item.url && isValidUrl(item.url))
                 .map(item => ({
@@ -1184,7 +1190,6 @@ async function handleFileImport(event) {
                 return;
             }
 
-            // 调用批量导入 API
             const result = await API.importLinks(importData);
 
             let msg = `✅ 导入完成：成功 ${result.successCount} 条`;
@@ -1484,7 +1489,6 @@ document.addEventListener('DOMContentLoaded', function() {
     var userBtn = document.getElementById('userMenuBtn');
     var dropdown = document.getElementById('userDropdown');
 
-    // 点击切换菜单
     if (userBtn) {
         userBtn.addEventListener('click', function(e) {
             e.stopPropagation();
@@ -1496,7 +1500,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // 菜单项事件绑定
     var menuAdd = document.getElementById('menuAdd');
     var menuSpeed = document.getElementById('menuSpeed');
     var menuImport = document.getElementById('menuImport');
@@ -1578,7 +1581,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // 更新用户信息
     function updateUserInfo() {
         try {
             var user = JSON.parse(localStorage.getItem('user') || '{}');
