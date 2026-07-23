@@ -113,151 +113,17 @@ body.dark .clear-search-btn:hover {
     display: none;
 }
 
-/* ========== 功能按钮 ========== */
-.btn-group {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    align-items: center;
-    flex-shrink: 0;
-}
-.btn-group button {
-    padding: 0 16px;
-    height: 38px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 500;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s;
-    white-space: nowrap;
-}
-.add-btn {
-    background: #00b866;
-    color: #fff;
-}
-.add-btn:hover {
-    background: #00a55c;
-}
-body.dark .add-btn {
-    background: #10b981;
-}
-body.dark .add-btn:hover {
-    background: #059669;
-}
-.refresh-btn {
-    background: #4b5563;
-    color: #fff;
-}
-.refresh-btn:hover {
-    background: #374151;
-}
-body.dark .refresh-btn {
-    background: #6b7280;
-}
-body.dark .refresh-btn:hover {
-    background: #4b5563;
-}
-.import-json-btn {
-    background: #00b866;
-    color: #fff;
-}
-.import-json-btn:hover {
-    background: #00a55c;
-}
-body.dark .import-json-btn {
-    background: #10b981;
-}
-body.dark .import-json-btn:hover {
-    background: #059669;
-}
-.export-json-btn {
-    background: #2563eb;
-    color: #fff;
-}
-.export-json-btn:hover {
-    background: #1d4ed8;
-}
-body.dark .export-json-btn {
-    background: #3b82f6;
-}
-body.dark .export-json-btn:hover {
-    background: #2563eb;
-}
-.drag-lock-btn {
-    background: #00b866;
-    color: #fff;
-    width: 38px;
-    padding: 0;
-}
-.drag-lock-btn.locked {
-    background: #ef4444;
-}
-.drag-lock-btn:hover {
-    background: #00a55c;
-}
-.drag-lock-btn.locked:hover {
-    background: #dc2626;
-}
-body.dark .drag-lock-btn {
-    background: #10b981;
-}
-body.dark .drag-lock-btn.locked {
-    background: #ef4444;
-}
-body.dark .drag-lock-btn:hover {
-    background: #059669;
-}
-body.dark .drag-lock-btn.locked:hover {
-    background: #b91c1c;
-}
-.theme-toggle-btn {
-    background: #4b5563;
-    color: #fff;
-    width: 38px;
-    padding: 0;
-}
-.theme-toggle-btn:hover {
-    background: #374151;
-}
-body.dark .theme-toggle-btn {
-    background: #6b7280;
-}
-body.dark .theme-toggle-btn:hover {
-    background: #4b5563;
-}
-#fileInput {
-    display: none;
-}
-
 /* ========== 用户下拉菜单 ========== */
 .user-menu {
     display: flex;
     align-items: center;
     gap: 8px;
-    position: relative;
     flex-shrink: 0;
 }
 
-.sync-status {
-    font-size: 13px;
-    font-weight: 500;
-    color: #6b7280;
-    padding: 0 16px;
-    height: 38px;
-    line-height: 38px;
-    background: #f0f3f9;
-    border-radius: 8px;
-    display: inline-flex;
-    align-items: center;
-    white-space: nowrap;
-}
-body.dark .sync-status {
-    background: #404258;
-    color: #9ca3af;
+.user-dropdown {
+    position: relative;
+    display: inline-block;
 }
 
 .user-btn {
@@ -270,10 +136,11 @@ body.dark .sync-status {
     border-radius: 8px;
     background: #f9fbfc;
     cursor: pointer;
-    transition: all 0.2s;
     font-size: 13px;
     font-weight: 500;
     color: #1f2937;
+    transition: all 0.2s;
+    white-space: nowrap;
 }
 body.dark .user-btn {
     background: #343541;
@@ -288,6 +155,7 @@ body.dark .user-btn:hover {
     border-color: #10b981;
     background: #404258;
 }
+
 .user-avatar {
     font-size: 16px;
     line-height: 1;
@@ -304,46 +172,43 @@ body.dark .user-btn:hover {
     color: #9ca3af;
     transition: transform 0.2s;
 }
-.user-dropdown.open .user-arrow {
-    transform: rotate(180deg);
-}
 
+/* 下拉菜单 */
 .dropdown-menu {
+    display: none;
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
-    min-width: 170px;
+    min-width: 160px;
     background: #fff;
     border-radius: 12px;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
     border: 1px solid #e8f8f0;
     padding: 6px 0;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-8px) scale(0.96);
-    transition: all 0.2s ease;
     z-index: 1000;
+    max-height: 400px;
+    overflow-y: auto;
 }
 body.dark .dropdown-menu {
     background: #242535;
     border-color: #404258;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
 }
+
 .user-dropdown.open .dropdown-menu {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0) scale(1);
+    display: block;
 }
 
 .dropdown-item {
     padding: 8px 16px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 13px;
     color: #1f2937;
     transition: background 0.15s;
+    white-space: nowrap;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
 }
 body.dark .dropdown-item {
     color: #e5e5e5;
@@ -354,6 +219,7 @@ body.dark .dropdown-item {
 body.dark .dropdown-item:hover {
     background: #404258;
 }
+
 .dropdown-divider {
     height: 1px;
     background: #e8f8f0;
@@ -362,6 +228,7 @@ body.dark .dropdown-item:hover {
 body.dark .dropdown-divider {
     background: #404258;
 }
+
 .user-info-item {
     cursor: default;
 }
@@ -382,6 +249,7 @@ body.dark .dropdown-divider {
 body.dark .dropdown-role {
     color: #9ca3af;
 }
+
 .logout-item {
     color: #ef4444;
 }
@@ -393,6 +261,13 @@ body.dark .logout-item {
 }
 body.dark .logout-item:hover {
     background: #450a0a !important;
+}
+
+.menu-admin {
+    color: #8b5cf6;
+}
+body.dark .menu-admin {
+    color: #a78bfa;
 }
 
 /* ========== 标签筛选 ========== */
