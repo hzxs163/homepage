@@ -1,206 +1,135 @@
 // ============================================================
-//  API 层 - 本地模拟模式
-//  所有数据存在 localStorage，模拟后端行为
+//  API 层 - 连接 Cloudflare Workers 后端
 // ============================================================
 
-// 当前用户
-let currentUser = null;
+const API_BASE = 'https://navapi.wkm.kdns.fr/api';
 
-// 获取当前用户
-function getCurrentUser() {
-    if (!currentUser) {
-        const saved = localStorage.getItem('user');
-        if (saved) currentUser = JSON.parse(saved);
+// ============================================================
+//  核心请求函数
+// ============================================================
+
+function getToken() {
+    return localStorage.getItem('token');
+}
+
+async function apiCall(method, endpoint, data = null) {
+    const url = API_BASE + endpoint;
+    const headers = {
+        'Content-Type': 'application/json'
+    };
+
+    const token = getToken();
+    if (token) {
+        headers['Authorization'] = 'Bearer ' + token;
     }
-    return currentUser;
-}
 
-// 获取所有链接（按用户隔离）
-function getLinks() {
-    const user = getCurrentUser();
-    if (!user) return [];
-    const key = `links_${user.username}`;
-    try {
-        const data = localStorage.getItem(key);
-        return data ? JSON.parse(data) : [];
-    } catch { return []; }
-}
+    const options = {
+        method: method,
+        headers: headers
+    };
 
-// 保存链接
-function saveLinks(links) {
-    const user = getCurrentUser();
-    if (!user) return;
-    localStorage.setItem(`links_${user.username}`, JSON.stringify(links));
-}
-
-// 获取所有用户列表
-function getUsers() {
-    try {
-        const data = localStorage.getItem('_users');
-        return data ? JSON.parse(data) : [];
-    } catch { return []; }
-}
-
-// 保存用户列表
-function saveUsers(users) {
-    localStorage.setItem('_users', JSON.stringify(users));
-}
-
-// 初始化默认用户
-function initDefaultUsers() {
-    let users = getUsers();
-    if (users.length === 0) {
-        users = [
-            { username: 'admin', password: 'admin123', role: 'admin' },
-            { username: 'user1', password: '123456', role: 'user' }
-        ];
-        saveUsers(users);
+    if (data) {
+        options.body = JSON.stringify(data);
     }
-    return users;
+
+    const response = await fetch(url, options);
+    const result = await response.json();
+
+    if (!response.ok) {
+        if (response.status === 401) {
+            // Token 过期，清除登录状态
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.reload();
+            throw new Error('登录已过期，请重新登录');
+        }
+        throw new Error(result.error || '请求失败');
+    }
+
+    return result;
 }
 
 // ============================================================
-//  对外 API 接口（模拟后端）
+//  对外 API 接口
 // ============================================================
 
 const API = {
 
     // -------- 认证 --------
     async login(username, password) {
-        const users = getUsers();
-        const user = users.find(u => u.username === username);
-        if (!user) {
-            // 自动注册：不存在则创建普通用户
-            const newUser = { username, password, role: 'user' };
-            users.push(newUser);
-            saveUsers(users);
-            return { token: 'mock-token-' + Date.now(), user: { username, role: 'user' } };
-        }
-        if (user.password !== password) {
-            throw new Error('密码错误');
-        }
-        return { token: 'mock-token-' + Date.now(), user: { username: user.username, role: user.role } };
+        const result = await apiCall('POST', '/auth/login', { username, password });
+        return result;
     },
 
     // -------- 链接 --------
     async getLinks() {
-        const links = getLinks();
-        return links.map((item, index) => ({
-            id: item.id || index + 1,
-            title: item.name,
-            url: item.url,
-            icon: item.icon || '',
-            tags: item.tags || [],
-            sort_order: item.sort || 0,
-            click_count: item.click_count || 0,
-            created_at: item.created_at || new Date().toISOString()
-        }));
+        const result = await apiCall('GET', '/links');
+        return result;
     },
 
     async addLink(data) {
-        const links = getLinks();
-        const newLink = {
-            id: Date.now(),
-            name: data.title,
-            url: data.url,
-            icon: data.icon || '',
-            tags: data.tags || [],
-            sort: data.sort_order || 0,
-            click_count: 0,
-            created_at: new Date().toISOString()
-        };
-        links.push(newLink);
-        saveLinks(links);
-        return { success: true, id: newLink.id };
+        const result = await apiCall('POST', '/links', data);
+        return result;
     },
 
     async updateLink(id, data) {
-        const links = getLinks();
-        const idx = links.findIndex(item => item.id === id);
-        if (idx === -1) throw new Error('链接不存在');
-        links[idx].name = data.title;
-        links[idx].url = data.url;
-        links[idx].icon = data.icon || '';
-        links[idx].tags = data.tags || [];
-        links[idx].sort = data.sort_order || 0;
-        saveLinks(links);
-        return { success: true };
+        const result = await apiCall('PUT', '/links/' + id, data);
+        return result;
     },
 
     async deleteLink(id) {
-        let links = getLinks();
-        links = links.filter(item => item.id !== id);
-        saveLinks(links);
-        return { success: true };
+        const result = await apiCall('DELETE', '/links/' + id);
+        return result;
     },
 
     async updateSort(id, sortOrder) {
-        const links = getLinks();
-        const idx = links.findIndex(item => item.id === id);
-        if (idx === -1) throw new Error('链接不存在');
-        links[idx].sort = sortOrder;
-        saveLinks(links);
-        return { success: true };
+        const result = await apiCall('PUT', '/links/' + id + '/sort', { sort_order: sortOrder });
+        return result;
     },
 
     async recordClick(id) {
-        const links = getLinks();
-        const idx = links.findIndex(item => item.id === id);
-        if (idx === -1) return;
-        links[idx].click_count = (links[idx].click_count || 0) + 1;
-        saveLinks(links);
+        try {
+            await apiCall('POST', '/links/' + id + '/click');
+        } catch (e) {
+            // 点击记录失败不影响主流程
+            console.log('点击记录失败:', e);
+        }
     },
 
     async exportLinks() {
-        const links = getLinks();
-        return links.map(item => ({
-            name: item.name,
-            url: item.url,
-            icon: item.icon || '',
-            tags: item.tags || [],
-            sort: item.sort || 0
-        }));
+        const result = await apiCall('GET', '/links/export');
+        return result;
+    },
+
+    // -------- 标签 --------
+    async getTags() {
+        const result = await apiCall('GET', '/tags');
+        return result;
+    },
+
+    async saveTagOrder(tags) {
+        const result = await apiCall('POST', '/tags/order', { tags });
+        return result;
     },
 
     // -------- 管理员 --------
     async getUsers() {
-        const users = getUsers();
-        return users.map(u => ({
-            username: u.username,
-            role: u.role,
-            created_at: u.created_at || '2024-01-01'
-        }));
+        const result = await apiCall('GET', '/admin/users');
+        return result;
     },
 
     async createUser(username, password) {
-        const users = getUsers();
-        if (users.find(u => u.username === username)) {
-            throw new Error('用户已存在');
-        }
-        users.push({ username, password, role: 'user', created_at: new Date().toISOString() });
-        saveUsers(users);
-        return { success: true };
+        const result = await apiCall('POST', '/admin/users', { username, password });
+        return result;
     },
 
     async resetPassword(username, newPassword) {
-        const users = getUsers();
-        const user = users.find(u => u.username === username);
-        if (!user) throw new Error('用户不存在');
-        user.password = newPassword;
-        saveUsers(users);
-        return { success: true };
+        const result = await apiCall('PUT', '/admin/users/' + username + '/reset', { password: newPassword });
+        return result;
     },
 
     async deleteUser(username) {
-        const users = getUsers();
-        const user = users.find(u => u.username === username);
-        if (!user) throw new Error('用户不存在');
-        if (user.role === 'admin') throw new Error('不能删除管理员');
-        const filtered = users.filter(u => u.username !== username);
-        saveUsers(filtered);
-        return { success: true };
+        const result = await apiCall('DELETE', '/admin/users/' + username);
+        return result;
     }
 };
-
-// 初始化默认用户
-initDefaultUsers();
