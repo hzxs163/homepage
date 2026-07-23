@@ -1560,12 +1560,3 @@ document.addEventListener('DOMContentLoaded', function() {
     // 暴露给 enterMainPage 调用
     window.updateDropdownUserInfo = updateDropdownUserInfo;
 });
-
-// 在 enterMainPage 里调用更新
-const originalEnterMainPage = enterMainPage;
-enterMainPage = function() {
-    originalEnterMainPage();
-    if (typeof window.updateDropdownUserInfo === 'function') {
-        window.updateDropdownUserInfo();
-    }
-};
