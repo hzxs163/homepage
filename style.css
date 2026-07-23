@@ -56,10 +56,11 @@ body.dark .login-error { color: #f87171; }
 }
 .search-input {
     flex: 1;
-    padding: 10px 16px;
+    padding: 0 16px;
+    height: 38px;
     border: 1px solid #e8f8f0;
     border-radius: 8px;
-    font-size: 15px;
+    font-size: 14px;
     color: #1f2937;
     background: #fff;
     transition: border-color 0.2s, box-shadow 0.2s;
@@ -80,15 +81,20 @@ body.dark .search-input:focus {
     box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
 }
 .clear-search-btn {
-    padding: 10px 16px;
+    padding: 0 16px;
+    height: 38px;
     border: 1px solid #e8f8f0;
     border-radius: 8px;
     background: #f9fbfc;
     color: #6b7280;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 13px;
+    font-weight: 500;
     white-space: nowrap;
     transition: background 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 body.dark .clear-search-btn {
     background: #343541;
@@ -116,17 +122,18 @@ body.dark .clear-search-btn:hover {
     flex-shrink: 0;
 }
 .btn-group button {
-    padding: 8px 14px;
+    padding: 0 16px;
+    height: 38px;
     border: none;
     border-radius: 8px;
     cursor: pointer;
     font-size: 13px;
     font-weight: 500;
-    height: 38px;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     transition: background 0.2s;
+    white-space: nowrap;
 }
 .add-btn {
     background: #00b866;
@@ -184,6 +191,7 @@ body.dark .export-json-btn:hover {
     background: #00b866;
     color: #fff;
     width: 38px;
+    padding: 0;
 }
 .drag-lock-btn.locked {
     background: #ef4444;
@@ -210,6 +218,7 @@ body.dark .drag-lock-btn.locked:hover {
     background: #4b5563;
     color: #fff;
     width: 38px;
+    padding: 0;
 }
 .theme-toggle-btn:hover {
     background: #374151;
@@ -228,32 +237,42 @@ body.dark .theme-toggle-btn:hover {
 .user-menu {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     position: relative;
     flex-shrink: 0;
 }
+
 .sync-status {
-    font-size: 11px;
+    font-size: 13px;
+    font-weight: 500;
     color: #6b7280;
-    padding: 4px 10px;
+    padding: 0 16px;
+    height: 38px;
+    line-height: 38px;
     background: #f0f3f9;
-    border-radius: 99px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
 }
 body.dark .sync-status {
     background: #404258;
     color: #9ca3af;
 }
+
 .user-btn {
     display: flex;
     align-items: center;
-    gap: 5px;
-    padding: 5px 10px 5px 8px;
+    gap: 6px;
+    padding: 0 14px 0 10px;
+    height: 38px;
     border: 1px solid #e8f8f0;
-    border-radius: 99px;
+    border-radius: 8px;
     background: #f9fbfc;
     cursor: pointer;
     transition: all 0.2s;
     font-size: 13px;
+    font-weight: 500;
     color: #1f2937;
 }
 body.dark .user-btn {
@@ -288,6 +307,7 @@ body.dark .user-btn:hover {
 .user-dropdown.open .user-arrow {
     transform: rotate(180deg);
 }
+
 .dropdown-menu {
     position: absolute;
     top: calc(100% + 8px);
@@ -314,6 +334,7 @@ body.dark .dropdown-menu {
     visibility: visible;
     transform: translateY(0) scale(1);
 }
+
 .dropdown-item {
     padding: 8px 16px;
     cursor: pointer;
