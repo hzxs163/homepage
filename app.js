@@ -1477,46 +1477,61 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ============================================================
-//  用户下拉菜单（简化版）
+//  用户下拉菜单（兼容所有浏览器）
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', function() {
-    const userMenuBtn = document.getElementById('userMenuBtn');
-    const userDropdown = document.getElementById('userDropdown');
+    var userBtn = document.getElementById('userMenuBtn');
+    var dropdown = document.getElementById('userDropdown');
+    var logoutItem = document.getElementById('logoutMenuItem');
+    var adminItem = document.getElementById('adminMenuItem');
 
-    if (userMenuBtn && userDropdown) {
-        userMenuBtn.addEventListener('click', function(e) {
+    if (userBtn) {
+        userBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            userDropdown.classList.toggle('open');
+            if (dropdown) {
+                dropdown.classList.toggle('open');
+            }
         });
 
-        document.addEventListener('click', function(e) {
-            if (!userDropdown.contains(e.target)) {
-                userDropdown.classList.remove('open');
+        document.addEventListener('click', function() {
+            if (dropdown) {
+                dropdown.classList.remove('open');
             }
         });
     }
 
-    // 更新用户名
-    function updateUser() {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const nameEl = document.getElementById('displayUsername');
-        const roleEl = document.getElementById('dropdownRole');
-        const adminItem = document.getElementById('adminMenuItem');
-        if (nameEl) nameEl.textContent = user.username || '用户';
-        if (roleEl) roleEl.textContent = user.role === 'admin' ? '管理员' : '普通';
-        if (adminItem) {
-            adminItem.style.display = user.role === 'admin' ? 'flex' : 'none';
-        }
+    if (logoutItem) {
+        logoutItem.addEventListener('click', function() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.reload();
+        });
     }
-    updateUser();
 
-    // 退出
-    document.getElementById('logoutMenuItem')?.addEventListener('click', doLogout);
+    if (adminItem) {
+        adminItem.addEventListener('click', function() {
+            if (typeof openAdminPanel === 'function') {
+                openAdminPanel();
+            }
+            if (dropdown) {
+                dropdown.classList.remove('open');
+            }
+        });
+    }
 
-    // 管理
-    document.getElementById('adminMenuItem')?.addEventListener('click', function() {
-        openAdminPanel();
-        userDropdown.classList.remove('open');
-    });
+    // 更新用户信息
+    function updateUserInfo() {
+        try {
+            var user = JSON.parse(localStorage.getItem('user') || '{}');
+            var nameEl = document.getElementById('displayUsername');
+            var roleEl = document.getElementById('dropdownRole');
+            if (nameEl) nameEl.textContent = user.username || '用户';
+            if (roleEl) roleEl.textContent = user.role === 'admin' ? '管理员' : '普通';
+            if (adminItem) {
+                adminItem.style.display = user.role === 'admin' ? 'flex' : 'none';
+            }
+        } catch(e) {}
+    }
+    updateUserInfo();
 });
