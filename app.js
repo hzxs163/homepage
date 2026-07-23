@@ -48,12 +48,15 @@ function getFileName() {
     return `站点备份-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.json`;
 }
 
-function getSiteLogoSync(url) {
+function getSiteLogoSync(url, name) {
     try {
-        const parsedUrl = new URL(url);
-        return `${parsedUrl.protocol}//${parsedUrl.hostname}/favicon.ico`;
-    } catch (error) {
-        return `https://ui-avatars.com/api/?name=${encodeURIComponent(url)}&background=00b866&color=fff&size=48`;
+        const u = new URL(url);
+        // 优先用 Google 图标服务
+        return `https://www.google.com/s2/favicons?domain=${u.hostname}&sz=64`;
+    } catch {
+        // 解析失败用首字母
+        const letter = (name || '链接').charAt(0).toUpperCase();
+        return `https://ui-avatars.com/api/?name=${encodeURIComponent(letter)}&background=00b866&color=fff&size=48&font-size=0.5`;
     }
 }
 
