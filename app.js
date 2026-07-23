@@ -107,6 +107,10 @@ function showSkeleton() {
 
 function hideSkeleton() {
     isLoading = false;
+    const wrap = document.getElementById('siteListWrap');
+    if (wrap) {
+        wrap.innerHTML = '';  // ← 关键修复：真正清空骨架屏
+    }
 }
 
 // ============================================================
@@ -141,24 +145,36 @@ async function loadLinks() {
 
     try {
         const data = await API.getLinks();
+        
+        // 确保 data 是数组
+        if (!Array.isArray(data)) {
+            throw new Error('返回的数据不是数组');
+        }
+        
         siteList = data.map(item => ({
             id: item.id,
-            name: item.title,
-            url: item.url,
+            name: item.title || item.name || '未命名',
+            url: item.url || '',
             icon: item.icon || '',
-            tags: item.tags || [],
-            sort: item.sort_order || 0,
+            tags: Array.isArray(item.tags) ? item.tags : [],
+            sort: item.sort_order || item.sort || 0,
             click_count: item.click_count || 0
         }));
         siteList.sort((a, b) => (a.sort || 0) - (b.sort || 0));
         localStorage.setItem('siteList', JSON.stringify(siteList));
         if (statusEl) {
-            statusEl.textContent = '● 本地模式';
+            statusEl.textContent = '● 云端模式 ✅';
         }
     } catch (err) {
+        console.error('加载数据失败:', err);
         const cached = localStorage.getItem('siteList');
         if (cached) {
-            siteList = JSON.parse(cached);
+            try {
+                siteList = JSON.parse(cached);
+                if (!Array.isArray(siteList)) siteList = [];
+            } catch {
+                siteList = [];
+            }
             if (statusEl) {
                 statusEl.textContent = '● 缓存模式';
             }
@@ -168,6 +184,7 @@ async function loadLinks() {
             if (statusEl) {
                 statusEl.textContent = '● 无数据';
             }
+            showToast('加载数据失败，请刷新重试');
         }
     }
     hideSkeleton();
@@ -179,11 +196,19 @@ async function loadLinks() {
 // ============================================================
 
 function getAllTags() {
+    // 确保 siteList 是数组
+    if (!Array.isArray(siteList)) {
+        siteList = [];
+        return [];
+    }
+    
     const tagCount = {};
     siteList.forEach(site => {
-        if (site.tags) site.tags.forEach(tag => {
-            tagCount[tag] = (tagCount[tag] || 0) + 1;
-        });
+        if (site.tags && Array.isArray(site.tags)) {
+            site.tags.forEach(tag => {
+                if (tag) tagCount[tag] = (tagCount[tag] || 0) + 1;
+            });
+        }
     });
 
     let tags = Object.keys(tagCount);
@@ -343,17 +368,24 @@ function initTagSortable() {
 }
 
 function getFilteredList() {
+    // 确保 siteList 是数组
+    if (!Array.isArray(siteList)) {
+        console.error('siteList 不是数组，重新初始化');
+        siteList = [];
+        return [];
+    }
+
     const searchInput = document.getElementById('searchInput');
     const keyword = searchInput ? searchInput.value.trim().toLowerCase() : '';
     let list = [...siteList];
     if (activeTag !== 'all') {
-        list = list.filter(s => s.tags && s.tags.includes(activeTag));
+        list = list.filter(s => s.tags && Array.isArray(s.tags) && s.tags.includes(activeTag));
     }
     if (keyword) {
         list = list.filter(s =>
-            s.name.toLowerCase().includes(keyword) ||
-            s.url.toLowerCase().includes(keyword) ||
-            (s.tags && s.tags.some(t => t.toLowerCase().includes(keyword)))
+            (s.name || '').toLowerCase().includes(keyword) ||
+            (s.url || '').toLowerCase().includes(keyword) ||
+            (s.tags && Array.isArray(s.tags) && s.tags.some(t => (t || '').toLowerCase().includes(keyword)))
         );
     }
     list.sort((a, b) => (a.sort || 0) - (b.sort || 0));
@@ -362,6 +394,13 @@ function getFilteredList() {
 
 function renderList() {
     if (isRendering) return;
+    
+    // 确保 siteList 是数组
+    if (!Array.isArray(siteList)) {
+        console.error('siteList 不是数组，重新初始化');
+        siteList = [];
+    }
+    
     isRendering = true;
     if (sortableInstance) {
         sortableInstance.destroy();
@@ -376,7 +415,7 @@ function renderList() {
     wrap.innerHTML = '';
     const filtered = getFilteredList();
 
-    if (filtered.length === 0) {
+    if (!Array.isArray(filtered) || filtered.length === 0) {
         wrap.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#6b7280;">暂无链接，点击「添加网址」开始收藏</div>';
         isRendering = false;
         return;
@@ -387,43 +426,47 @@ function renderList() {
         const div = document.createElement('div');
         div.className = `site-item ${isDragLocked ? 'locked' : ''}`;
         if (isDragLocked) div.style.cursor = 'not-allowed';
-        div.setAttribute('data-url', site.url);
-        div.setAttribute('data-id', site.id);
+        div.setAttribute('data-url', site.url || '');
+        div.setAttribute('data-id', site.id || '');
 
         let iconHtml = '';
         if (site.icon && site.icon.length <= 2 && !site.icon.startsWith('http')) {
             iconHtml = `<div class="site-icon" style="background:#00b866;">${site.icon}</div>`;
         } else {
-            const logo = getSiteLogoSync(site.url);
-            iconHtml = `<div class="site-icon"><img src="${logo}" alt="${site.name}" onerror="this.parentElement.innerHTML='🔗';this.parentElement.style.background='#00b866'"></div>`;
+            const logo = getSiteLogoSync(site.url || '');
+            iconHtml = `<div class="site-icon"><img src="${logo}" alt="${site.name || '链接'}" onerror="this.parentElement.innerHTML='🔗';this.parentElement.style.background='#00b866'"></div>`;
         }
 
         let tagsHtml = '';
-        if (site.tags && site.tags.length) {
+        if (site.tags && Array.isArray(site.tags) && site.tags.length) {
             const displayTags = site.tags.slice(0, 3);
             const extraCount = site.tags.length - 3;
             tagsHtml = '<div class="site-tags">' +
-                displayTags.map(t => `<span class="site-tag">${t}</span>`).join('') +
+                displayTags.map(t => `<span class="site-tag">${t || ''}</span>`).join('') +
                 (extraCount > 0 ? `<span class="site-tag" style="background:#e5e7eb;color:#6b7280;">+${extraCount}</span>` : '') +
                 '</div>';
         }
 
         let latencyText = '未测速';
         let latencyClass = '';
-        if (latencyCache[site.url] !== undefined) {
-            if (latencyCache[site.url] === '超时') {
+        const url = site.url || '';
+        if (latencyCache[url] !== undefined) {
+            if (latencyCache[url] === '超时') {
                 latencyText = '超时';
                 latencyClass = 'latency-timeout';
             } else {
-                latencyText = latencyCache[site.url] + ' ms';
+                latencyText = latencyCache[url] + ' ms';
             }
         }
+
+        const siteName = site.name || '未命名';
+        const siteUrl = site.url || '';
 
         div.innerHTML = iconHtml +
             `<div class="latency-tag ${latencyClass}">${latencyText}</div>
             <div class="site-info">
-                <div class="site-name">${site.name}</div>
-                <div class="site-url">${site.url}</div>
+                <div class="site-name">${siteName}</div>
+                <div class="site-url">${siteUrl}</div>
                 ${tagsHtml}
             </div>`;
 
@@ -564,7 +607,7 @@ function showContextMenu(x, y, id, url) {
 
     const items = [
         { label: '✏️ 编辑', action: () => openEditModal(id) },
-        { label: '📋 复制链接', action: () => { navigator.clipboard.writeText(url);
+        { label: '📋 复制链接', action: () => { navigator.clipboard.writeText(url || '');
                 showToast('链接已复制'); } },
         { label: '🗑️ 删除', action: () => { if (confirm('确定删除吗？')) { deleteSiteById(id); } }, danger: true }
     ];
@@ -737,8 +780,8 @@ function openEditModal(id = null) {
     if (id) {
         const site = siteList.find(s => s.id === id);
         if (site) {
-            if (nameInput) nameInput.value = site.name;
-            if (urlInput) urlInput.value = site.url;
+            if (nameInput) nameInput.value = site.name || '';
+            if (urlInput) urlInput.value = site.url || '';
             if (iconInput) iconInput.value = site.icon || '';
             if (tagsInput) tagsInput.value = (site.tags || []).join(',');
             if (sortInput) sortInput.value = site.sort || 0;
@@ -774,7 +817,7 @@ function renderExistingTags(filter = '') {
     let filteredTags = filter ? allTags.filter(tag => tag.toLowerCase().includes(filter.toLowerCase())) : allTags;
 
     const isFiltering = filter.length > 0;
-    const MAX_VISIBLE = 14; // 固定显示20个，两行
+    const MAX_VISIBLE = 14;
     const isExpanded = tagExpandState['default'] || false;
 
     let displayTags = filteredTags;
@@ -794,7 +837,6 @@ function renderExistingTags(filter = '') {
         return;
     }
 
-    // 用 flex 布局，自动换行
     const flexContainer = document.createElement('div');
     flexContainer.style.cssText = `
         display: flex;
@@ -1109,39 +1151,39 @@ async function handleFileImport(event) {
             const data = JSON.parse(e.target.result);
             if (!Array.isArray(data)) { showToast('格式错误：需要数组'); return; }
 
-            const existingUrls = new Set(siteList.map(s => s.url));
+            // 显示加载状态
+            showToast(`正在导入 ${data.length} 条数据...`);
 
-            let successCount = 0;
-            let skipCount = 0;
-
-            for (const item of data) {
-                if (!item.name || !item.url || !isValidUrl(item.url)) continue;
-
-                if (existingUrls.has(item.url)) {
-                    skipCount++;
-                    continue;
-                }
-
-                await API.addLink({
-                    id: Date.now() + Math.random() * 1000,
+            // 转换数据格式，准备批量导入
+            const importData = data
+                .filter(item => item.name && item.url && isValidUrl(item.url))
+                .map(item => ({
                     title: item.name,
                     url: item.url,
                     icon: item.icon || '',
                     tags: item.tags || [],
-                    sort_order: item.sort || 0
-                });
-                successCount++;
-                existingUrls.add(item.url);
+                    sort: item.sort || 0
+                }));
+
+            if (importData.length === 0) {
+                showToast('没有有效数据可导入');
+                return;
             }
 
-            let msg = `导入完成：成功 ${successCount} 个`;
-            if (skipCount > 0) {
-                msg += `，跳过 ${skipCount} 个（已存在）`;
+            // 调用批量导入 API
+            const result = await API.importLinks(importData);
+
+            let msg = `✅ 导入完成：成功 ${result.successCount} 条`;
+            if (result.skipCount > 0) {
+                msg += `，⏭️ 跳过 ${result.skipCount} 条（已存在）`;
+            }
+            if (result.errorCount > 0) {
+                msg += `，❌ 失败 ${result.errorCount} 条`;
             }
             showToast(msg);
             await loadLinks();
         } catch (err) {
-            showToast('导入失败：' + err.message);
+            showToast('❌ 导入失败：' + err.message);
         }
     };
     reader.readAsText(file);
