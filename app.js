@@ -1477,35 +1477,86 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ============================================================
-//  用户下拉菜单（兼容所有浏览器）
+//  用户下拉菜单（兼容 Edge）
 // ============================================================
 
-document.addEventListener('DOMContentLoaded', function() {
+(function() {
     var userBtn = document.getElementById('userMenuBtn');
     var dropdown = document.getElementById('userDropdown');
-    var logoutItem = document.getElementById('logoutMenuItem');
-    var adminItem = document.getElementById('adminMenuItem');
 
+    // 点击切换菜单
     if (userBtn) {
         userBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            if (dropdown) {
-                dropdown.classList.toggle('open');
-            }
+            dropdown.classList.toggle('open');
         });
 
         document.addEventListener('click', function() {
-            if (dropdown) {
-                dropdown.classList.remove('open');
-            }
+            dropdown.classList.remove('open');
         });
     }
 
-    if (logoutItem) {
-        logoutItem.addEventListener('click', function() {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            window.location.reload();
+    // 菜单项事件绑定
+    var menuAdd = document.getElementById('menuAdd');
+    var menuSpeed = document.getElementById('menuSpeed');
+    var menuImport = document.getElementById('menuImport');
+    var menuExport = document.getElementById('menuExport');
+    var menuLock = document.getElementById('menuLock');
+    var menuTheme = document.getElementById('menuTheme');
+    var adminItem = document.getElementById('adminMenuItem');
+    var logoutItem = document.getElementById('logoutMenuItem');
+
+    if (menuAdd) {
+        menuAdd.addEventListener('click', function() {
+            if (typeof openEditModal === 'function') {
+                openEditModal();
+            }
+            dropdown.classList.remove('open');
+        });
+    }
+
+    if (menuSpeed) {
+        menuSpeed.addEventListener('click', function() {
+            if (typeof batchTestLatency === 'function') {
+                batchTestLatency();
+            }
+            dropdown.classList.remove('open');
+        });
+    }
+
+    if (menuImport) {
+        menuImport.addEventListener('click', function() {
+            if (typeof importJson === 'function') {
+                importJson();
+            }
+            dropdown.classList.remove('open');
+        });
+    }
+
+    if (menuExport) {
+        menuExport.addEventListener('click', function() {
+            if (typeof exportJson === 'function') {
+                exportJson();
+            }
+            dropdown.classList.remove('open');
+        });
+    }
+
+    if (menuLock) {
+        menuLock.addEventListener('click', function() {
+            if (typeof toggleDragLock === 'function') {
+                toggleDragLock();
+            }
+            dropdown.classList.remove('open');
+        });
+    }
+
+    if (menuTheme) {
+        menuTheme.addEventListener('click', function() {
+            if (typeof toggleTheme === 'function') {
+                toggleTheme();
+            }
+            dropdown.classList.remove('open');
         });
     }
 
@@ -1514,9 +1565,16 @@ document.addEventListener('DOMContentLoaded', function() {
             if (typeof openAdminPanel === 'function') {
                 openAdminPanel();
             }
-            if (dropdown) {
-                dropdown.classList.remove('open');
+            dropdown.classList.remove('open');
+        });
+    }
+
+    if (logoutItem) {
+        logoutItem.addEventListener('click', function() {
+            if (typeof doLogout === 'function') {
+                doLogout();
             }
+            dropdown.classList.remove('open');
         });
     }
 
@@ -1525,8 +1583,10 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             var user = JSON.parse(localStorage.getItem('user') || '{}');
             var nameEl = document.getElementById('displayUsername');
+            var dropdownName = document.getElementById('dropdownUsername');
             var roleEl = document.getElementById('dropdownRole');
             if (nameEl) nameEl.textContent = user.username || '用户';
+            if (dropdownName) dropdownName.textContent = user.username || '用户';
             if (roleEl) roleEl.textContent = user.role === 'admin' ? '管理员' : '普通';
             if (adminItem) {
                 adminItem.style.display = user.role === 'admin' ? 'flex' : 'none';
@@ -1534,4 +1594,4 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch(e) {}
     }
     updateUserInfo();
-});
+})();
