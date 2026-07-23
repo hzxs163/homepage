@@ -50,10 +50,10 @@ function getFileName() {
 
 function getSiteLogoSync(url) {
     try {
-        const u = new URL(url);
-        return `${u.protocol}//${u.hostname}/favicon.ico`;
-    } catch {
-        return `https://ui-avatars.com/api/?name=🔗&background=00b866&color=fff&size=48`;
+        const parsedUrl = new URL(url);
+        return `${parsedUrl.protocol}//${parsedUrl.hostname}/favicon.ico`;
+    } catch (error) {
+        return `https://ui-avatars.com/api/?name=${encodeURIComponent(url)}&background=00b866&color=fff&size=48`;
     }
 }
 
