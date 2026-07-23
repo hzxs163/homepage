@@ -4,27 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>我的导航</title>
-
-<!-- ========== PWA 配置 ========== -->
-<link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#00b866">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-
-<!-- ========== 图标（PWA 安装用） ========== -->
-<link rel="icon" type="image/png" sizes="72x72" href="/icons/icon-72.png">
-<link rel="icon" type="image/png" sizes="96x96" href="/icons/icon-96.png">
-<link rel="icon" type="image/png" sizes="128x128" href="/icons/icon-128.png">
-<link rel="icon" type="image/png" sizes="144x144" href="/icons/icon-144.png">
-<link rel="icon" type="image/png" sizes="152x152" href="/icons/icon-152.png">
-<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
-<link rel="icon" type="image/png" sizes="384x384" href="/icons/icon-384.png">
-<link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
-
-<!-- ========== 依赖库 ========== -->
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-
-<!-- ========== 样式 ========== -->
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -51,42 +31,63 @@
 <!-- ==================== 主页面 ==================== -->
 <div id="mainPage" style="display:none;">
 
+    <!-- ========== 顶栏 ========== -->
     <div class="main-header">
-        <div class="title">
-            <span class="title-line"></span>
-            我的导航
+        <!-- 第一行：功能按钮 + 用户菜单 -->
+        <div class="header-top">
+            <div class="btn-group">
+                <button class="add-btn" id="addBtn">添加网址</button>
+                <button class="refresh-btn" id="refreshBtn">测速</button>
+                <button class="import-json-btn" id="importBtn">导入</button>
+                <button class="export-json-btn" id="exportBtn">导出</button>
+                <button class="drag-lock-btn" id="dragLockBtn">🔒</button>
+                <button class="theme-toggle-btn" id="themeToggleBtn">🌞</button>
+                <input type="file" id="fileInput" accept=".json">
+            </div>
+            <div class="user-menu">
+                <span class="sync-status" id="syncStatus">● 云端</span>
+                <div class="user-dropdown" id="userDropdown">
+                    <button class="user-btn" id="userMenuBtn">
+                        <span class="user-avatar">👤</span>
+                        <span class="user-name" id="displayUsername">用户</span>
+                        <span class="user-arrow">▼</span>
+                    </button>
+                    <div class="dropdown-menu" id="dropdownMenu">
+                        <div class="dropdown-item user-info-item">
+                            <span class="user-avatar-small">👤</span>
+                            <div>
+                                <div class="dropdown-username" id="dropdownUsername">用户</div>
+                                <div class="dropdown-role" id="dropdownRole">普通</div>
+                            </div>
+                        </div>
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-item" id="adminMenuItem" style="display:none;">
+                            👥 管理
+                        </div>
+                        <div class="dropdown-item logout-item" id="logoutMenuItem">
+                            🚪 退出
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="user-info">
-            <span class="sync-status" id="syncStatus">● 本地模式</span>
-            <span class="username" id="displayUsername">用户</span>
-            <span class="role-tag" id="displayRole">普通</span>
-            <button class="admin-btn" id="adminBtn" style="display:none;">👥 管理</button>
-            <button class="logout-btn" id="logoutBtn">退出</button>
+
+        <!-- 第二行：搜索框 -->
+        <div class="header-bottom">
+            <div class="search-wrap">
+                <input type="text" class="search-input" id="searchInput" placeholder="输入关键词搜索站点名称/地址/标签...">
+                <button class="clear-search-btn hidden" id="clearSearchBtn">清除</button>
+            </div>
         </div>
     </div>
 
-    <div class="btn-group">
-        <div class="top-btn-row">
-            <button class="add-btn" id="addBtn">添加网址</button>
-            <button class="refresh-btn" id="refreshBtn">测速</button>
-            <button class="import-json-btn" id="importBtn">导入</button>
-            <button class="export-json-btn" id="exportBtn">导出</button>
-            <button class="drag-lock-btn" id="dragLockBtn">🔒</button>
-            <button class="theme-toggle-btn" id="themeToggleBtn">🌞</button>
-            <input type="file" id="fileInput" accept=".json">
-        </div>
-    </div>
-
-    <div class="search-wrap">
-        <input type="text" class="search-input" id="searchInput" placeholder="输入关键词搜索站点名称/地址/标签...">
-        <button class="clear-search-btn hidden" id="clearSearchBtn">清除</button>
-    </div>
-
+    <!-- ========== 标签筛选 ========== -->
     <div class="tags-filter-wrap" id="tagsFilterWrap">
         <div class="tags-filter-title">标签筛选：</div>
         <div class="tags-list" id="tagsList"></div>
     </div>
 
+    <!-- ========== 链接列表 ========== -->
     <div id="siteListWrap" class="site-list-grid"></div>
 </div>
 
@@ -162,26 +163,9 @@
 <!-- ==================== Toast提示 ==================== -->
 <div class="toast" id="toast"></div>
 
-<!-- ==================== JavaScript ==================== -->
 <script src="api.js"></script>
 <script src="auth.js"></script>
 <script src="app.js"></script>
 <script src="admin.js"></script>
-
-<!-- ==================== PWA: 注册 Service Worker ==================== -->
-<script>
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function() {
-        navigator.serviceWorker.register('/sw.js')
-            .then(function(reg) {
-                console.log('PWA: Service Worker 注册成功');
-            })
-            .catch(function(err) {
-                console.log('PWA: Service Worker 注册失败', err);
-            });
-    });
-}
-</script>
-
 </body>
 </html>
