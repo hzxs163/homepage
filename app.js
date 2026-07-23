@@ -48,68 +48,21 @@ function getFileName() {
     return `站点备份-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.json`;
 }
 
-// ===== 图标获取函数（localStorage + D1 双层缓存） =====
+// ===== 图标获取函数（首字母占位 + localStorage缓存） =====
 function getSiteLogoSync(site) {
     if (!site) {
         return 'https://ui-avatars.com/api/?name=🔗&background=00b866&color=fff&size=48';
     }
     
-    // 第一层：检查 localStorage 缓存
+    // 检查 localStorage 缓存
     const cacheKey = 'icon_' + site.id;
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
         return cached;
     }
     
-    // 第二层：检查 site 对象里是否有 icon_url（从 D1 加载的）
-    if (site.icon_url) {
-        localStorage.setItem(cacheKey, site.icon_url);
-        return site.icon_url;
-    }
-    
-    // 第三层：生成图标 URL
-    let iconUrl;
-    try {
-        const u = new URL(site.url || '');
-        iconUrl = `https://www.google.com/s2/favicons?domain=${u.hostname}&sz=64`;
-    } catch {
-        const letter = (site.name || '链接').charAt(0).toUpperCase();
-        iconUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(letter)}&background=00b866&color=fff&size=48&font-size=0.5`;
-    }
-    
-    // 存到 localStorage
-    localStorage.setItem(cacheKey, iconUrl);
-    
-    // 异步保存到 D1（不阻塞渲染）
-    if (site.id && typeof API !== 'undefined' && API.saveIcon) {
-        API.saveIcon(site.id, iconUrl).catch(() => {});
-    }
-    
-    return iconUrl;
-}
-
-// ===== 异步从 D1 批量加载图标 =====
-async function loadIconsFromD1() {
-    if (!siteList || siteList.length === 0) return;
-    
-    try {
-        // 批量获取图标
-        const promises = siteList.map(site => 
-            API.getIcon(site.id).then(result => {
-                if (result && result.icon_url) {
-                    site.icon_url = result.icon_url;
-                    const cacheKey = 'icon_' + site.id;
-                    if (!localStorage.getItem(cacheKey)) {
-                        localStorage.setItem(cacheKey, result.icon_url);
-                    }
-                }
-            }).catch(() => {})
-        );
-        await Promise.all(promises);
-    } catch (e) {
-        // 静默失败，不影响主流程
-        console.log('加载D1图标失败:', e);
-    }
+    // 返回空，表示需要懒加载
+    return null;
 }
 
 function isMobileDevice() {
@@ -222,7 +175,6 @@ async function loadLinks() {
                 name: item.title || '未命名',
                 url: item.url || '',
                 icon: item.icon || '',
-                icon_url: item.icon_url || null,  // ← 从 D1 读取图标
                 tags: tags,
                 sort: item.sort_order || 0,
                 click_count: item.click_count || 0
@@ -230,10 +182,6 @@ async function loadLinks() {
         });
         siteList.sort((a, b) => (a.sort || 0) - (b.sort || 0));
         localStorage.setItem('siteList', JSON.stringify(siteList));
-        
-        // 从 D1 加载图标到内存
-        // await loadIconsFromD1();
-        
         if (statusEl) {
             statusEl.textContent = '● 云端模式 ✅';
         }
@@ -491,6 +439,8 @@ function renderList() {
     }
 
     const frag = document.createDocumentFragment();
+    const lazyItems = [];
+
     filtered.forEach((site) => {
         const div = document.createElement('div');
         div.className = `site-item ${isDragLocked ? 'locked' : ''}`;
@@ -498,12 +448,25 @@ function renderList() {
         div.setAttribute('data-url', site.url || '');
         div.setAttribute('data-id', site.id || '');
 
+        // ===== 图标渲染（首字母占位 + 懒加载） =====
         let iconHtml = '';
         if (site.icon && site.icon.length <= 2 && !site.icon.startsWith('http')) {
             iconHtml = `<div class="site-icon" style="background:#00b866;">${site.icon}</div>`;
         } else {
-            const logo = getSiteLogoSync(site);
-            iconHtml = `<div class="site-icon"><img src="${logo}" alt="${site.name || '链接'}" onerror="this.parentElement.innerHTML='🔗';this.parentElement.style.background='#00b866'" loading="lazy"></div>`;
+            // 检查 localStorage 缓存
+            const cacheKey = 'icon_' + site.id;
+            const cached = localStorage.getItem(cacheKey);
+            
+            if (cached) {
+                // 有缓存 → 直接显示图标
+                iconHtml = `<div class="site-icon" style="background:transparent;"><img src="${cached}" alt="${site.name || '链接'}" style="width:100%;height:100%;object-fit:cover;"></div>`;
+            } else {
+                // 无缓存 → 先显示首字母占位
+                const letter = (site.name || '链接').charAt(0).toUpperCase();
+                iconHtml = `<div class="site-icon" style="background:#00b866;font-size:24px;font-weight:bold;color:#fff;display:flex;align-items:center;justify-content:center;">${letter}</div>`;
+                // 记录到懒加载队列
+                lazyItems.push({ div, site });
+            }
         }
 
         let tagsHtml = '';
@@ -622,6 +585,11 @@ function renderList() {
     setTimeout(() => {
         if (!isDragLocked) initSortableDrag();
         isRendering = false;
+        
+        // ===== 启动懒加载图标 =====
+        if (lazyItems.length > 0) {
+            startLazyLoad(lazyItems);
+        }
     }, 50);
 }
 
@@ -1696,3 +1664,147 @@ document.addEventListener('DOMContentLoaded', function() {
     if (loginPage) loginPage.style.display = 'flex';
     if (mainPage) mainPage.style.display = 'none';
 });
+
+// ============================================================
+//  懒加载图标（滚动到才加载 + 每批5个 + localStorage缓存）
+// ============================================================
+
+let lazyObserver = null;
+let iconLoadQueue = [];
+let isLoadingIcons = false;
+const BATCH_SIZE = 5;
+
+function startLazyLoad(items) {
+    // 只保留没有缓存的
+    iconLoadQueue = items.filter(({ site }) => {
+        const cacheKey = 'icon_' + site.id;
+        return !localStorage.getItem(cacheKey);
+    });
+    
+    if (iconLoadQueue.length === 0) return;
+    
+    // 立即加载第一屏可见的（最多5个）
+    setTimeout(() => {
+        loadVisibleIcons();
+    }, 100);
+    
+    // 创建 IntersectionObserver
+    if (lazyObserver) {
+        lazyObserver.disconnect();
+    }
+    
+    lazyObserver = new IntersectionObserver((entries) => {
+        const toLoad = [];
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const div = entry.target;
+                const item = iconLoadQueue.find(i => i.div === div);
+                if (item && !div._iconLoaded) {
+                    toLoad.push(item);
+                }
+            }
+        });
+        
+        if (toLoad.length > 0) {
+            // 每次最多加载 BATCH_SIZE 个
+            const batch = toLoad.slice(0, BATCH_SIZE);
+            batch.forEach(({ div, site }) => {
+                loadSingleIcon(div, site);
+            });
+        }
+    }, {
+        rootMargin: '100px',
+        threshold: 0.01
+    });
+    
+    // 开始观察所有卡片
+    iconLoadQueue.forEach(({ div }) => {
+        lazyObserver.observe(div);
+    });
+}
+
+function loadVisibleIcons() {
+    let loaded = 0;
+    for (let i = 0; i < iconLoadQueue.length && loaded < BATCH_SIZE; i++) {
+        const { div, site } = iconLoadQueue[i];
+        if (div._iconLoaded) continue;
+        const rect = div.getBoundingClientRect();
+        if (rect.top < window.innerHeight + 100 && rect.bottom > -100) {
+            loadSingleIcon(div, site);
+            loaded++;
+        }
+    }
+}
+
+function loadSingleIcon(div, site) {
+    if (div._iconLoaded) return;
+    div._iconLoaded = true;
+    
+    const iconEl = div.querySelector('.site-icon');
+    if (!iconEl) return;
+    if (iconEl.querySelector('img')) return;
+    
+    // 再次检查 localStorage 缓存
+    const cacheKey = 'icon_' + site.id;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+        iconEl.innerHTML = '';
+        iconEl.style.background = 'transparent';
+        iconEl.style.fontSize = '';
+        iconEl.style.fontWeight = '';
+        iconEl.style.color = '';
+        iconEl.style.display = '';
+        const img = document.createElement('img');
+        img.src = cached;
+        img.alt = site.name || '图标';
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'cover';
+        iconEl.appendChild(img);
+        return;
+    }
+    
+    // 直接拉取网站 favicon
+    let iconUrl;
+    try {
+        const u = new URL(site.url || '');
+        iconUrl = `${u.protocol}//${u.hostname}/favicon.ico`;
+    } catch {
+        // URL 解析失败，保留首字母
+        return;
+    }
+    
+    // 加载图片
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function() {
+        iconEl.innerHTML = '';
+        iconEl.style.background = 'transparent';
+        iconEl.style.fontSize = '';
+        iconEl.style.fontWeight = '';
+        iconEl.style.color = '';
+        iconEl.style.display = '';
+        const newImg = document.createElement('img');
+        newImg.src = iconUrl;
+        newImg.alt = site.name || '图标';
+        newImg.style.width = '100%';
+        newImg.style.height = '100%';
+        newImg.style.objectFit = 'cover';
+        iconEl.appendChild(newImg);
+        localStorage.setItem(cacheKey, iconUrl);
+    };
+    img.onerror = function() {
+        // 加载失败，保留首字母
+        div._iconLoaded = false;
+    };
+    img.src = iconUrl;
+}
+
+function cleanupLazyLoad() {
+    if (lazyObserver) {
+        lazyObserver.disconnect();
+        lazyObserver = null;
+    }
+    iconLoadQueue = [];
+    isLoadingIcons = false;
+}
