@@ -48,16 +48,32 @@ function getFileName() {
     return `站点备份-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.json`;
 }
 
-function getSiteLogoSync(url, name) {
-    try {
-        const u = new URL(url);
-        // 优先用 Google 图标服务
-        return `https://www.google.com/s2/favicons?domain=${u.hostname}&sz=64`;
-    } catch {
-        // 解析失败用首字母
-        const letter = (name || '链接').charAt(0).toUpperCase();
-        return `https://ui-avatars.com/api/?name=${encodeURIComponent(letter)}&background=00b866&color=fff&size=48&font-size=0.5`;
+// ===== 图标获取函数（带 localStorage 缓存） =====
+function getSiteLogoSync(site) {
+    if (!site) {
+        return 'https://ui-avatars.com/api/?name=🔗&background=00b866&color=fff&size=48';
     }
+    
+    // 第一层：检查 localStorage 缓存
+    const cacheKey = 'icon_' + site.id;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+        return cached;
+    }
+    
+    // 第二层：生成图标 URL
+    let iconUrl;
+    try {
+        const u = new URL(site.url || '');
+        iconUrl = `https://www.google.com/s2/favicons?domain=${u.hostname}&sz=64`;
+    } catch {
+        const letter = (site.name || '链接').charAt(0).toUpperCase();
+        iconUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(letter)}&background=00b866&color=fff&size=48&font-size=0.5`;
+    }
+    
+    // 存到 localStorage
+    localStorage.setItem(cacheKey, iconUrl);
+    return iconUrl;
 }
 
 function isMobileDevice() {
@@ -433,7 +449,7 @@ function renderList() {
         return;
     }
 
-const frag = document.createDocumentFragment();
+    const frag = document.createDocumentFragment();
     filtered.forEach((site) => {
         const div = document.createElement('div');
         div.className = `site-item ${isDragLocked ? 'locked' : ''}`;
@@ -445,8 +461,9 @@ const frag = document.createDocumentFragment();
         if (site.icon && site.icon.length <= 2 && !site.icon.startsWith('http')) {
             iconHtml = `<div class="site-icon" style="background:#00b866;">${site.icon}</div>`;
         } else {
-            const logo = getSiteLogoSync(site.url || '');
-            iconHtml = `<div class="site-icon"><img src="${logo}" alt="${site.name || '链接'}" onerror="this.parentElement.innerHTML='🔗';this.parentElement.style.background='#00b866'"></div>`;
+            // 修改：传入 site 对象，支持缓存
+            const logo = getSiteLogoSync(site);
+            iconHtml = `<div class="site-icon"><img src="${logo}" alt="${site.name || '链接'}" onerror="this.parentElement.innerHTML='🔗';this.parentElement.style.background='#00b866'" loading="lazy"></div>`;
         }
 
         let tagsHtml = '';
