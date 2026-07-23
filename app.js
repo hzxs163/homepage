@@ -720,52 +720,46 @@ function toggleDragLock() {
     }
     showToast(isDragLocked ? '拖拽已锁定' : '拖拽已解锁');
 }
+onEnd: async (evt) => {
+    isDragging = false;
+    isMouseMoving = false;
 
-function initSortableDrag() {
-    if (isDragLocked || sortableInstance) return;
     const wrap = document.getElementById('siteListWrap');
     if (!wrap) return;
-    sortableInstance = new Sortable(wrap, {
-        animation: 200,
-        ghostClass: 'sortable-ghost',
-        dragClass: 'sortable-drag',
-        onStart: () => {
-            isDragging = true;
-            isMouseMoving = false;
-        },
-        onEnd: async (evt) => {
-            isDragging = false;
-            isMouseMoving = false;
 
-            const wrap = document.getElementById('siteListWrap');
-            if (!wrap) return;
+    // 获取当前 DOM 中卡片的顺序
+    const items = wrap.querySelectorAll('.site-item');
+    
+    // 按 DOM 顺序重新排列 siteList
+    const newOrder = [];
+    items.forEach(el => {
+        const id = parseInt(el.dataset.id);
+        const site = siteList.find(s => s.id === id);
+        if (site) newOrder.push(site);
+    });
 
-            const items = wrap.querySelectorAll('.site-item');
+    // 重新分配 sort 值
+    newOrder.forEach((site, index) => {
+        site.sort = (index + 1) * 10;
+    });
 
-            const newOrder = [];
-            items.forEach(el => {
-                const id = parseInt(el.dataset.id);
-                const site = siteList.find(s => s.id === id);
-                if (site) newOrder.push(site);
-            });
+    // 重新排序 siteList
+    siteList.sort((a, b) => a.sort - b.sort);
 
-            newOrder.forEach((site, index) => {
-                site.sort = (index + 1) * 10;
-            });
-
-            siteList.sort((a, b) => a.sort - b.sort);
-
-            try {
-                for (const site of newOrder) {
-                    await API.updateSort(site.id, site.sort);
-                }
-                renderList();
-                showToast('排序已保存');
-            } catch (err) {
-                showToast('排序保存失败，重新加载数据');
-                await loadLinks();
-            }
+    // 调用 API 更新排序
+    try {
+        for (const site of newOrder) {
+            await API.updateSort(site.id, site.sort);
         }
+        // 不重新渲染，只更新数据
+        // 卡片已经在 DOM 中处于正确位置，无需重新创建
+        showToast('排序已保存');
+    } catch (err) {
+        showToast('排序保存失败，重新加载数据');
+        await loadLinks();
+    }
+}
+
     });
 }
 
