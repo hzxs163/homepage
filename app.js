@@ -48,7 +48,7 @@ function getFileName() {
     return `站点备份-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.json`;
 }
 
-// ===== 图标获取函数（带 localStorage 缓存） =====
+// ===== 图标获取函数（localStorage + D1 双层缓存） =====
 function getSiteLogoSync(site) {
     if (!site) {
         return 'https://ui-avatars.com/api/?name=🔗&background=00b866&color=fff&size=48';
@@ -61,7 +61,13 @@ function getSiteLogoSync(site) {
         return cached;
     }
     
-    // 第二层：生成图标 URL
+    // 第二层：检查 site 对象里是否有 icon_url（从 D1 加载的）
+    if (site.icon_url) {
+        localStorage.setItem(cacheKey, site.icon_url);
+        return site.icon_url;
+    }
+    
+    // 第三层：生成图标 URL
     let iconUrl;
     try {
         const u = new URL(site.url || '');
@@ -73,7 +79,37 @@ function getSiteLogoSync(site) {
     
     // 存到 localStorage
     localStorage.setItem(cacheKey, iconUrl);
+    
+    // 异步保存到 D1（不阻塞渲染）
+    if (site.id && typeof API !== 'undefined' && API.saveIcon) {
+        API.saveIcon(site.id, iconUrl).catch(() => {});
+    }
+    
     return iconUrl;
+}
+
+// ===== 异步从 D1 批量加载图标 =====
+async function loadIconsFromD1() {
+    if (!siteList || siteList.length === 0) return;
+    
+    try {
+        // 批量获取图标
+        const promises = siteList.map(site => 
+            API.getIcon(site.id).then(result => {
+                if (result && result.icon_url) {
+                    site.icon_url = result.icon_url;
+                    const cacheKey = 'icon_' + site.id;
+                    if (!localStorage.getItem(cacheKey)) {
+                        localStorage.setItem(cacheKey, result.icon_url);
+                    }
+                }
+            }).catch(() => {})
+        );
+        await Promise.all(promises);
+    } catch (e) {
+        // 静默失败，不影响主流程
+        console.log('加载D1图标失败:', e);
+    }
 }
 
 function isMobileDevice() {
@@ -186,6 +222,7 @@ async function loadLinks() {
                 name: item.title || '未命名',
                 url: item.url || '',
                 icon: item.icon || '',
+                icon_url: item.icon_url || null,  // ← 从 D1 读取图标
                 tags: tags,
                 sort: item.sort_order || 0,
                 click_count: item.click_count || 0
@@ -193,6 +230,10 @@ async function loadLinks() {
         });
         siteList.sort((a, b) => (a.sort || 0) - (b.sort || 0));
         localStorage.setItem('siteList', JSON.stringify(siteList));
+        
+        // 从 D1 加载图标到内存
+        await loadIconsFromD1();
+        
         if (statusEl) {
             statusEl.textContent = '● 云端模式 ✅';
         }
@@ -461,7 +502,6 @@ function renderList() {
         if (site.icon && site.icon.length <= 2 && !site.icon.startsWith('http')) {
             iconHtml = `<div class="site-icon" style="background:#00b866;">${site.icon}</div>`;
         } else {
-            // 修改：传入 site 对象，支持缓存
             const logo = getSiteLogoSync(site);
             iconHtml = `<div class="site-icon"><img src="${logo}" alt="${site.name || '链接'}" onerror="this.parentElement.innerHTML='🔗';this.parentElement.style.background='#00b866'" loading="lazy"></div>`;
         }
