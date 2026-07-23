@@ -101,6 +101,17 @@ const API = {
         return result;
     },
 
+    // -------- 图标 --------
+    async getIcon(id) {
+        const result = await apiCall('GET', '/links/' + id + '/icon');
+        return result;
+    },
+
+    async saveIcon(id, icon_url) {
+        const result = await apiCall('POST', '/links/' + id + '/icon', { icon_url });
+        return result;
+    },
+
     // -------- 批量导入 --------
     async importLinks(data) {
         if (!Array.isArray(data) || data.length === 0) {
