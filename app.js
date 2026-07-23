@@ -720,46 +720,51 @@ function toggleDragLock() {
     }
     showToast(isDragLocked ? '拖拽已锁定' : '拖拽已解锁');
 }
-onEnd: async (evt) => {
-    isDragging = false;
-    isMouseMoving = false;
 
+function initSortableDrag() {
+    if (isDragLocked || sortableInstance) return;
     const wrap = document.getElementById('siteListWrap');
     if (!wrap) return;
+    sortableInstance = new Sortable(wrap, {
+        animation: 200,
+        ghostClass: 'sortable-ghost',
+        dragClass: 'sortable-drag',
+        onStart: () => {
+            isDragging = true;
+            isMouseMoving = false;
+        },
+        onEnd: async (evt) => {
+            isDragging = false;
+            isMouseMoving = false;
 
-    // 获取当前 DOM 中卡片的顺序
-    const items = wrap.querySelectorAll('.site-item');
-    
-    // 按 DOM 顺序重新排列 siteList
-    const newOrder = [];
-    items.forEach(el => {
-        const id = parseInt(el.dataset.id);
-        const site = siteList.find(s => s.id === id);
-        if (site) newOrder.push(site);
-    });
+            const wrap = document.getElementById('siteListWrap');
+            if (!wrap) return;
 
-    // 重新分配 sort 值
-    newOrder.forEach((site, index) => {
-        site.sort = (index + 1) * 10;
-    });
+            const items = wrap.querySelectorAll('.site-item');
 
-    // 重新排序 siteList
-    siteList.sort((a, b) => a.sort - b.sort);
+            const newOrder = [];
+            items.forEach(el => {
+                const id = parseInt(el.dataset.id);
+                const site = siteList.find(s => s.id === id);
+                if (site) newOrder.push(site);
+            });
 
-    // 调用 API 更新排序
-    try {
-        for (const site of newOrder) {
-            await API.updateSort(site.id, site.sort);
+            newOrder.forEach((site, index) => {
+                site.sort = (index + 1) * 10;
+            });
+
+            siteList.sort((a, b) => a.sort - b.sort);
+
+            try {
+                for (const site of newOrder) {
+                    await API.updateSort(site.id, site.sort);
+                }
+                showToast('排序已保存');
+            } catch (err) {
+                showToast('排序保存失败，重新加载数据');
+                await loadLinks();
+            }
         }
-        // 不重新渲染，只更新数据
-        // 卡片已经在 DOM 中处于正确位置，无需重新创建
-        showToast('排序已保存');
-    } catch (err) {
-        showToast('排序保存失败，重新加载数据');
-        await loadLinks();
-    }
-}
-
     });
 }
 
@@ -1591,3 +1596,43 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     updateUserInfo();
 })();
+
+// ============================================================
+//  页面加载后自动登录（修复跳转登录页问题）
+// ============================================================
+
+document.addEventListener('DOMContentLoaded', function() {
+    var token = localStorage.getItem('token');
+    var user = localStorage.getItem('user');
+    
+    if (token && user) {
+        try {
+            var userData = JSON.parse(user);
+            if (userData.username) {
+                // 直接显示主页面
+                var loginPage = document.getElementById('loginPage');
+                var mainPage = document.getElementById('mainPage');
+                if (loginPage) loginPage.style.display = 'none';
+                if (mainPage) mainPage.style.display = 'block';
+                
+                // 更新用户信息
+                var nameEl = document.getElementById('displayUsername');
+                var roleEl = document.getElementById('displayRole');
+                if (nameEl) nameEl.textContent = userData.username || '用户';
+                if (roleEl) roleEl.textContent = userData.role === 'admin' ? '管理员' : '普通';
+                
+                // 初始化应用
+                if (typeof initApp === 'function') {
+                    initApp();
+                }
+                return;
+            }
+        } catch(e) {}
+    }
+    
+    // 未登录：显示登录页
+    var loginPage = document.getElementById('loginPage');
+    var mainPage = document.getElementById('mainPage');
+    if (loginPage) loginPage.style.display = 'flex';
+    if (mainPage) mainPage.style.display = 'none';
+});
