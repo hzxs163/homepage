@@ -101,6 +101,18 @@ const API = {
         return result;
     },
 
+    // -------- 批量导入 --------
+    async importLinks(data) {
+        if (!Array.isArray(data) || data.length === 0) {
+            throw new Error('数据格式错误，需要非空数组');
+        }
+        if (data.length > 2000) {
+            throw new Error('单次导入不能超过2000条');
+        }
+        const result = await apiCall('POST', '/links/import', data);
+        return result;
+    },
+
     // -------- 标签 --------
     async getTags() {
         const result = await apiCall('GET', '/tags');
