@@ -291,7 +291,22 @@ body.dark .tag-item.all:hover { background: #475569; }
 
 /* ========== 链接列表 ========== */
 .site-list-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 14px; }
-.site-item { display: flex; flex-direction: column; align-items: center; background: #f9fbfc; border: 1px solid #e8f8f0; border-radius: 12px; padding: 16px 12px; gap: 8px; text-align: center; transition: box-shadow 0.2s, transform 0.2s; cursor: grab; min-width: 0; }
+
+.site-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #fdf8f0;
+    border: 1px solid #f0e8d8;
+    border-radius: 12px;
+    padding: 16px 12px;
+    gap: 8px;
+    text-align: center;
+    transition: box-shadow 0.2s, transform 0.2s;
+    cursor: grab;
+    min-width: 0;
+}
+
 body.dark .site-item { background: #343541; border-color: #404258; }
 .site-item.locked { cursor: not-allowed; }
 .site-item:active { cursor: grabbing; }
