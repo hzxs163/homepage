@@ -232,7 +232,7 @@ async function loadLinks() {
         localStorage.setItem('siteList', JSON.stringify(siteList));
         
         // 从 D1 加载图标到内存
-        await loadIconsFromD1();
+        // await loadIconsFromD1();
         
         if (statusEl) {
             statusEl.textContent = '● 云端模式 ✅';
