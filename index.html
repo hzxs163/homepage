@@ -33,23 +33,15 @@
 
     <!-- ========== 顶栏 ========== -->
     <div class="main-header">
-        <!-- 第一行：搜索框 + 功能按钮 + 用户菜单 -->
+        <!-- 第一行：搜索框 + 用户菜单 -->
         <div class="header-top">
             <div class="search-wrap">
                 <input type="text" class="search-input" id="searchInput" placeholder="输入关键词搜索站点名称/地址/标签...">
                 <button class="clear-search-btn hidden" id="clearSearchBtn">清除</button>
             </div>
-            <div class="btn-group">
-                <button class="add-btn" id="addBtn">添加网址</button>
-                <button class="refresh-btn" id="refreshBtn">测速</button>
-                <button class="import-json-btn" id="importBtn">导入</button>
-                <button class="export-json-btn" id="exportBtn">导出</button>
-                <button class="drag-lock-btn" id="dragLockBtn">🔒</button>
-                <button class="theme-toggle-btn" id="themeToggleBtn">🌞</button>
-                <input type="file" id="fileInput" accept=".json">
-            </div>
+
+            <!-- 用户菜单（所有功能都在里面） -->
             <div class="user-menu">
-                <span class="sync-status" id="syncStatus">● 云端</span>
                 <div class="user-dropdown" id="userDropdown">
                     <button class="user-btn" id="userMenuBtn">
                         <span class="user-avatar">👤</span>
@@ -57,6 +49,7 @@
                         <span class="user-arrow">▼</span>
                     </button>
                     <div class="dropdown-menu" id="dropdownMenu">
+                        <!-- 用户信息 -->
                         <div class="dropdown-item user-info-item">
                             <span class="user-avatar-small">👤</span>
                             <div>
@@ -65,12 +58,21 @@
                             </div>
                         </div>
                         <div class="dropdown-divider"></div>
-                        <div class="dropdown-item" id="adminMenuItem" style="display:none;">
-                            👥 管理
-                        </div>
-                        <div class="dropdown-item logout-item" id="logoutMenuItem">
-                            🚪 退出
-                        </div>
+
+                        <!-- 功能按钮（菜单项） -->
+                        <div class="dropdown-item menu-add" id="menuAdd">➕ 添加网址</div>
+                        <div class="dropdown-item menu-speed" id="menuSpeed">📊 测速</div>
+                        <div class="dropdown-item menu-import" id="menuImport">📥 导入</div>
+                        <div class="dropdown-item menu-export" id="menuExport">📤 导出</div>
+                        <div class="dropdown-item menu-lock" id="menuLock">🔒 拖拽锁定</div>
+                        <div class="dropdown-item menu-theme" id="menuTheme">🌞 切换主题</div>
+                        <div class="dropdown-divider"></div>
+
+                        <!-- 管理（仅管理员可见） -->
+                        <div class="dropdown-item menu-admin" id="adminMenuItem" style="display:none;">👥 管理</div>
+
+                        <!-- 退出 -->
+                        <div class="dropdown-item logout-item" id="logoutMenuItem">🚪 退出</div>
                     </div>
                 </div>
             </div>
