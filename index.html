@@ -36,10 +36,19 @@
     <div class="main-header">
         <!-- 第一行：搜索框 + 用户菜单 -->
         <div class="header-top">
-            <div class="search-wrap">
-                <input type="text" class="search-input" id="searchInput" placeholder="输入关键词搜索站点名称/地址/标签...">
-                <button class="clear-search-btn hidden" id="clearSearchBtn">清除</button>
-            </div>
+<div class="search-wrap">
+    <input type="text" class="search-input" id="searchInput" placeholder="输入关键词搜索站点名称/地址/标签...">
+    <select class="sort-select" id="sortSelect">
+        <option value="sort_order:ASC">默认排序</option>
+        <option value="click_count:DESC">点击量 ↓</option>
+        <option value="click_count:ASC">点击量 ↑</option>
+        <option value="created_at:DESC">最新添加</option>
+        <option value="created_at:ASC">最早添加</option>
+        <option value="title:ASC">名称 A→Z</option>
+        <option value="title:DESC">名称 Z→A</option>
+    </select>
+    <button class="clear-search-btn hidden" id="clearSearchBtn">清除</button>
+</div>
 
             <!-- 用户菜单（所有功能都在里面） -->
             <div class="user-menu">
