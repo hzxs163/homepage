@@ -316,6 +316,11 @@ function renderTagsFilter() {
         activeTag = 'all';
         saveActiveTag('all');
         renderList();
+        // 移动端自动收起标签栏
+        if (isMobileDevice()) {
+            const wrap = document.getElementById('tagsFilterWrap');
+            if (wrap) wrap.classList.remove('expanded');
+        }
     };
     tagsList.appendChild(allTag);
 
@@ -332,6 +337,11 @@ function renderTagsFilter() {
             activeTag = tag;
             saveActiveTag(tag);
             renderList();
+            // 移动端自动收起标签栏
+            if (isMobileDevice()) {
+                const wrap = document.getElementById('tagsFilterWrap');
+                if (wrap) wrap.classList.remove('expanded');
+            }
         };
         tagsList.appendChild(item);
     });
@@ -883,6 +893,16 @@ function openEditModal(id = null) {
     }
     modal.classList.add('show');
     if (nameInput) nameInput.focus();
+    
+    // 移动端：延迟调整弹窗位置，防止键盘遮挡
+    if (isMobileDevice()) {
+        setTimeout(() => {
+            const activeElement = document.activeElement;
+            if (activeElement && activeElement.tagName === 'INPUT') {
+                activeElement.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            }
+        }, 300);
+    }
 }
 
 function closeModal() {
