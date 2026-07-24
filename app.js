@@ -1306,59 +1306,69 @@ async function testLatency(url) {
 //  批量测速 - 逐卡实时更新
 // ============================================================
 
-async function batchTestLatency() {
-    const list = getFilteredList();
-    if (!list.length) { showToast('暂无链接'); return; }
+// ============================================================
+//  测速（返回延迟时间或状态）- 替换为图片加载方式
+// ============================================================
+
+async function testLatency(url) {
+    const start = performance.now();
+    const timeout = 8000;
     
-    const btn = document.getElementById('refreshBtn');
-    if (btn) btn.disabled = true;
-    
-    // 获取所有卡片元素
-    const allItems = document.querySelectorAll('.site-item');
-    
-    // 先让所有卡片显示"测速中"
-    allItems.forEach((item, index) => {
-        if (index < list.length) {
-            const tag = item.querySelector('.latency-tag');
-            if (tag) {
-                tag.textContent = '测速中';
-                tag.className = 'latency-tag latency-loading';
-            }
-        }
-    });
-    
-    showToast('测速中...');
-    
-    // 逐个测速，每测完一个立即更新对应卡片
-    for (let i = 0; i < list.length; i++) {
-        const url = list[i].url;
-        
-        // 执行测速
-        await testLatency(url);
-        
-        // 获取当前卡片（重新获取，避免 DOM 引用失效）
-        const items = document.querySelectorAll('.site-item');
-        if (items[i]) {
-            const tag = items[i].querySelector('.latency-tag');
-            if (tag) {
-                const result = latencyCache[url];
-                if (result === '超时' || result === '失效') {
-                    tag.textContent = result;
-                    tag.className = 'latency-tag latency-timeout';
-                } else if (typeof result === 'number' && result > 0) {
-                    tag.textContent = result + ' ms';
-                    tag.className = 'latency-tag latency-success';
-                } else {
-                    tag.textContent = '未测速';
-                    tag.className = 'latency-tag';
-                }
-            }
-        }
+    if (!url || !url.startsWith('http')) {
+        latencyCache[url] = '失效';
+        saveLatencyCache();
+        return '失效';
     }
     
-    if (btn) btn.disabled = false;
-    saveLatencyCache();
-    showToast('测速完成');
+    return new Promise((resolve) => {
+        let resolved = false;
+        const timer = setTimeout(() => {
+            if (!resolved) {
+                resolved = true;
+                latencyCache[url] = '超时';
+                saveLatencyCache();
+                resolve('超时');
+            }
+        }, timeout);
+        
+        // 用图片加载 favicon.ico 测速
+        let iconUrl;
+        try {
+            const u = new URL(url);
+            iconUrl = `${u.protocol}//${u.hostname}/favicon.ico`;
+        } catch {
+            latencyCache[url] = '失效';
+            saveLatencyCache();
+            clearTimeout(timer);
+            resolve('失效');
+            return;
+        }
+        
+        const img = new Image();
+        
+        img.onload = function() {
+            if (!resolved) {
+                resolved = true;
+                clearTimeout(timer);
+                const latency = Math.round(performance.now() - start);
+                latencyCache[url] = latency;
+                saveLatencyCache();
+                resolve(latency);
+            }
+        };
+        img.onerror = function() {
+            if (!resolved) {
+                resolved = true;
+                clearTimeout(timer);
+                // favicon 加载失败，标记为"失效"
+                latencyCache[url] = '失效';
+                saveLatencyCache();
+                resolve('失效');
+            }
+        };
+        
+        img.src = iconUrl;
+    });
 }
 
 // ============================================================
