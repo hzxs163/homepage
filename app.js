@@ -648,15 +648,15 @@ function renderAll() {
 }
 
 // ============================================================
-//  右键菜单
+//  右键菜单（移动端长按菜单）
 // ============================================================
 
 let contextMenuEl = null;
 
 function showContextMenu(x, y, id, url) {
+    // 如果已有菜单，先关闭
     if (contextMenuEl) {
-        contextMenuEl.remove();
-        contextMenuEl = null;
+        closeContextMenu();
     }
 
     const menu = document.createElement('div');
@@ -674,6 +674,7 @@ function showContextMenu(x, y, id, url) {
         font-size: 14px;
         color: #1f2937;
         border: 1px solid #e8f8f0;
+        touch-action: manipulation;
     `;
     if (document.body.classList.contains('dark')) {
         menu.style.background = '#242535';
@@ -681,6 +682,7 @@ function showContextMenu(x, y, id, url) {
         menu.style.color = '#e5e5e5';
     }
 
+    // 确保菜单不超出屏幕
     const rect = menu.getBoundingClientRect();
     if (x + rect.width > window.innerWidth) {
         menu.style.left = (x - rect.width) + 'px';
@@ -704,6 +706,9 @@ function showContextMenu(x, y, id, url) {
             cursor: pointer;
             transition: background 0.15s;
             color: ${item.danger ? '#ef4444' : 'inherit'};
+            touch-action: manipulation;
+            -webkit-touch-callout: none;
+            user-select: none;
         `;
         if (document.body.classList.contains('dark') && item.danger) {
             btn.style.color = '#f87171';
@@ -718,20 +723,67 @@ function showContextMenu(x, y, id, url) {
             item.action();
             closeContextMenu();
         };
+        btn.ontouchend = function(e) {
+            e.preventDefault();
+            item.action();
+            closeContextMenu();
+        };
         menu.appendChild(btn);
     });
 
     document.body.appendChild(menu);
     contextMenuEl = menu;
 
+    // 保存菜单引用以便清理
+    menu._id = id;
+
+    // ---- 滚动时关闭菜单 ----
+    const scrollHandler = function() {
+        closeContextMenu();
+    };
+
+    // ---- 点击页面其他位置关闭菜单 ----
+    const clickHandler = function(e) {
+        if (contextMenuEl && !contextMenuEl.contains(e.target)) {
+            closeContextMenu();
+        }
+    };
+
+    // ---- 触屏点击其他地方关闭 ----
+    const touchHandler = function(e) {
+        if (contextMenuEl && !contextMenuEl.contains(e.target)) {
+            closeContextMenu();
+        }
+    };
+
+    // 保存清理函数引用
+    menu._scrollHandler = scrollHandler;
+    menu._clickHandler = clickHandler;
+    menu._touchHandler = touchHandler;
+
+    // 绑定事件
     setTimeout(() => {
-        document.addEventListener('click', closeContextMenu, { once: true });
-        document.addEventListener('contextmenu', closeContextMenu, { once: true });
+        window.addEventListener('scroll', scrollHandler, { passive: true });
+        // 延迟绑定点击事件，防止点击菜单时立即触发关闭
+        setTimeout(() => {
+            document.addEventListener('click', clickHandler);
+            document.addEventListener('touchstart', touchHandler, { passive: true });
+        }, 50);
     }, 10);
 }
 
 function closeContextMenu() {
     if (contextMenuEl) {
+        // 清理所有事件监听
+        if (contextMenuEl._scrollHandler) {
+            window.removeEventListener('scroll', contextMenuEl._scrollHandler);
+        }
+        if (contextMenuEl._clickHandler) {
+            document.removeEventListener('click', contextMenuEl._clickHandler);
+        }
+        if (contextMenuEl._touchHandler) {
+            document.removeEventListener('touchstart', contextMenuEl._touchHandler);
+        }
         contextMenuEl.remove();
         contextMenuEl = null;
     }
