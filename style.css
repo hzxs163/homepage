@@ -1,6 +1,12 @@
 /* ========== 全局重置 ========== */
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
-body { background: #f0f3f9; padding: 40px 20px; transition: background 0.3s; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+body {
+    background: #f0f3f9;
+    padding: 40px 20px;
+    transition: background 0.3s;
+    min-height: 100vh;
+    /* 去掉 display: flex; align-items: center; justify-content: center; */
+}
 body.dark { background: #1a1b26; color: #e5e5e5; }
 
 /* ========== 容器 ========== */
