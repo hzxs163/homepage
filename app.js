@@ -3,7 +3,7 @@
 // ============================================================
 
 const TOAST_DURATION = 2000;
-const REQUEST_TIMEOUT = 3000;
+const REQUEST_TIMEOUT = 5000;
 const SCROLL_THRESHOLD = 300;
 
 let siteList = [];
@@ -537,15 +537,28 @@ function renderList() {
                 '</div>';
         }
 
+        // ===== 测速显示（支持状态码） =====
         let latencyText = '未测速';
         let latencyClass = '';
         const url = site.url || '';
-        if (latencyCache[url] !== undefined) {
-            if (latencyCache[url] === '超时') {
+        const result = latencyCache[url];
+        if (result !== undefined) {
+            if (result === '超时') {
                 latencyText = '超时';
                 latencyClass = 'latency-timeout';
+            } else if (result === '重定向') {
+                latencyText = '↪ 重定向';
+                latencyClass = 'latency-warning';
+            } else if (typeof result === 'number') {
+                if (result >= 200 && result < 300) {
+                    latencyText = result + ' ms';
+                    latencyClass = 'latency-success';
+                } else {
+                    latencyText = '状态 ' + result;
+                    latencyClass = 'latency-timeout';
+                }
             } else {
-                latencyText = latencyCache[url] + ' ms';
+                latencyText = String(result);
             }
         }
 
@@ -1251,22 +1264,47 @@ async function extractFromClipboard() {
 }
 
 // ============================================================
-//  测速
+//  测速（返回状态码或延迟时间）
 // ============================================================
 
 async function testLatency(url) {
     const start = performance.now();
+    const timeout = 5000;
+    
     try {
         const controller = new AbortController();
-        setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
-        await fetch(url, { method: 'HEAD', mode: 'no-cors', cache: 'no-cache', signal: controller.signal });
+        const timer = setTimeout(() => controller.abort(), timeout);
+        
+        const res = await fetch(url, {
+            method: 'GET',
+            cache: 'no-cache',
+            signal: controller.signal
+        });
+        
+        clearTimeout(timer);
         const latency = Math.round(performance.now() - start);
-        latencyCache[url] = latency;
-        localStorage.setItem('latencyCache', JSON.stringify(latencyCache));
-        return latency;
-    } catch {
+        
+        // 根据状态码判断
+        if (res.status >= 200 && res.status < 300) {
+            // 200-299：成功
+            latencyCache[url] = latency;
+            saveLatencyCache();
+            return latency;
+        } else if (res.status >= 300 && res.status < 400) {
+            // 301/302 重定向：算成功但显示"重定向"
+            latencyCache[url] = '重定向';
+            saveLatencyCache();
+            return '重定向';
+        } else {
+            // 404, 403, 500 等
+            latencyCache[url] = res.status;
+            saveLatencyCache();
+            return res.status;
+        }
+    } catch (err) {
+        clearTimeout(timer);
         latencyCache[url] = '超时';
-        localStorage.setItem('latencyCache', JSON.stringify(latencyCache));
+        saveLatencyCache();
         return '超时';
     }
 }
@@ -1275,6 +1313,11 @@ async function batchTestLatency() {
     const list = getFilteredList();
     if (!list.length) { showToast('暂无链接'); return; }
     showToast('测速中...');
+    
+    // 禁用按钮防止重复点击
+    const btn = document.getElementById('refreshBtn');
+    if (btn) btn.disabled = true;
+    
     const tags = document.querySelectorAll('.latency-tag');
     tags.forEach((el, i) => {
         if (i < list.length) {
@@ -1282,13 +1325,32 @@ async function batchTestLatency() {
             el.className = 'latency-tag latency-loading';
         }
     });
+    
+    // 逐个测速，避免并发过多
     for (let i = 0; i < list.length; i++) {
         const el = document.querySelectorAll('.latency-tag')[i];
         if (!el) continue;
         const result = await testLatency(list[i].url);
-        el.textContent = result === '超时' ? '超时' : result + ' ms';
-        el.className = 'latency-tag' + (result === '超时' ? ' latency-timeout' : '');
+        
+        // 根据结果显示
+        if (result === '超时') {
+            el.textContent = '超时';
+            el.className = 'latency-tag latency-timeout';
+        } else if (result === '重定向') {
+            el.textContent = '↪ 重定向';
+            el.className = 'latency-tag latency-warning';
+        } else if (typeof result === 'number') {
+            if (result >= 200 && result < 300) {
+                el.textContent = result + ' ms';
+                el.className = 'latency-tag latency-success';
+            } else {
+                el.textContent = '状态 ' + result;
+                el.className = 'latency-tag latency-timeout';
+            }
+        }
     }
+    
+    if (btn) btn.disabled = false;
     showToast('测速完成');
 }
 
@@ -1493,8 +1555,23 @@ window.initApp = initApp;
 function loadLatencyCache() {
     try {
         const saved = localStorage.getItem('latencyCache');
-        if (saved) latencyCache = JSON.parse(saved);
+        if (saved) {
+            latencyCache = JSON.parse(saved);
+            // 兼容旧数据：如果是数字且小于200，可能是延迟时间
+            for (const key in latencyCache) {
+                const val = latencyCache[key];
+                if (typeof val === 'number' && val > 0 && val < 200) {
+                    // 可能是延迟时间，保留
+                }
+            }
+        }
     } catch { latencyCache = {}; }
+}
+
+function saveLatencyCache() {
+    try {
+        localStorage.setItem('latencyCache', JSON.stringify(latencyCache));
+    } catch { }
 }
 
 // ============================================================
