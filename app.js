@@ -139,6 +139,12 @@ function restoreScrollPosition() {
 function showSkeleton() {
     const wrap = document.getElementById('siteListWrap');
     if (!wrap) return;
+    
+    // 🔥 如果有缓存，不显示骨架屏
+    if (localStorage.getItem('siteList')) {
+        return;
+    }
+    
     isLoading = true;
     let skeletonHtml = '';
     const count = window.innerWidth > 1200 ? 16 : (window.innerWidth > 768 ? 12 : 8);
@@ -153,14 +159,6 @@ function showSkeleton() {
         `;
     }
     wrap.innerHTML = skeletonHtml;
-}
-
-function hideSkeleton() {
-    isLoading = false;
-    const wrap = document.getElementById('siteListWrap');
-    if (wrap) {
-        wrap.innerHTML = '';
-    }
 }
 
 // ============================================================
@@ -187,31 +185,55 @@ function toggleTheme() {
 //  数据加载（支持排序）
 // ============================================================
 
+// ============================================================
+//  优化版数据加载 - 秒开策略
+// ============================================================
+
 async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
     const statusEl = document.getElementById('syncStatus');
-    if (statusEl) statusEl.textContent = '● 加载中...';
-
-    showSkeleton();
-
+    let hasCache = false;
+    
+    // ===== 第一步：立即从 localStorage 读取缓存，秒开 =====
+    const cached = localStorage.getItem('siteList');
+    if (cached) {
+        try {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                siteList = parsed;
+                hasCache = true;
+                
+                // ✅ 立即渲染，用户马上看到内容
+                hideSkeleton();
+                renderAll();
+                restoreScrollPosition();
+                
+                if (statusEl) statusEl.textContent = '● 缓存模式 ⚡';
+            }
+        } catch { }
+    }
+    
+    // 没有缓存才显示骨架屏
+    if (!hasCache) {
+        showSkeleton();
+        if (statusEl) statusEl.textContent = '● 加载中...';
+    } else {
+        if (statusEl) statusEl.textContent = '● 更新中...';
+    }
+    
+    // ===== 第二步：后台静默请求最新数据 =====
     try {
         const data = await API.getLinks(sortBy, order);
-
+        
         if (!Array.isArray(data)) {
             throw new Error('返回的数据不是数组');
         }
-
+        
         siteList = data.map(item => {
             let tags = item.tags || [];
             if (typeof tags === 'string') {
-                try {
-                    tags = JSON.parse(tags);
-                } catch (e) {
-                    tags = [];
-                }
+                try { tags = JSON.parse(tags); } catch { tags = []; }
             }
-            if (!Array.isArray(tags)) {
-                tags = [];
-            }
+            if (!Array.isArray(tags)) tags = [];
             return {
                 id: item.id,
                 name: item.title || '未命名',
@@ -223,38 +245,25 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
             };
         });
         
-        // 后端已排序，前端不再排序
         localStorage.setItem('siteList', JSON.stringify(siteList));
-        if (statusEl) {
-            statusEl.textContent = '● 云端模式 ✅';
-        }
+        
+        // 数据有变化才重新渲染
+        hideSkeleton();
+        renderAll();
+        restoreScrollPosition();
+        
+        if (statusEl) statusEl.textContent = '● 云端模式 ✅';
+        
     } catch (err) {
-        console.error('加载数据失败:', err);
-        const cached = localStorage.getItem('siteList');
-        if (cached) {
-            try {
-                siteList = JSON.parse(cached);
-                if (!Array.isArray(siteList)) siteList = [];
-            } catch {
-                siteList = [];
-            }
-            if (statusEl) {
-                statusEl.textContent = '● 缓存模式';
-            }
-            showToast('使用缓存数据');
-        } else {
+        console.error('后台更新失败:', err);
+        if (!hasCache) {
             siteList = [];
-            if (statusEl) {
-                statusEl.textContent = '● 无数据';
-            }
+            hideSkeleton();
+            renderAll();
             showToast('加载数据失败，请刷新重试');
         }
+        if (statusEl) statusEl.textContent = hasCache ? '● 缓存模式' : '● 无数据';
     }
-    hideSkeleton();
-    renderAll();
-    
-    // 恢复滚动位置
-    restoreScrollPosition();
 }
 
 // ============================================================
