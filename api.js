@@ -37,7 +37,6 @@ async function apiCall(method, endpoint, data = null) {
 
     if (!response.ok) {
         if (response.status === 401) {
-            // Token 过期，清除登录状态
             localStorage.removeItem('token');
             localStorage.removeItem('user');
             window.location.reload();
@@ -61,9 +60,9 @@ const API = {
         return result;
     },
 
-    // -------- 链接 --------
-    async getLinks() {
-        const result = await apiCall('GET', '/links');
+    // -------- 链接（支持排序） --------
+    async getLinks(sortBy = 'sort_order', order = 'ASC') {
+        const result = await apiCall('GET', `/links?sort=${sortBy}&order=${order}`);
         return result;
     },
 
@@ -91,7 +90,6 @@ const API = {
         try {
             await apiCall('POST', '/links/' + id + '/click');
         } catch (e) {
-            // 点击记录失败不影响主流程
             console.log('点击记录失败:', e);
         }
     },
