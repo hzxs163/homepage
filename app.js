@@ -1309,38 +1309,33 @@ async function batchTestLatency() {
     const btn = document.getElementById('refreshBtn');
     if (btn) btn.disabled = true;
     
-    const tags = document.querySelectorAll('.latency-tag');
-    tags.forEach((el, i) => {
-        if (i < list.length) {
-            el.textContent = '测速中';
-            el.className = 'latency-tag latency-loading';
-        }
-    });
-    
     // 逐个测速，避免并发过多
     for (let i = 0; i < list.length; i++) {
-        const el = document.querySelectorAll('.latency-tag')[i];
-        if (!el) continue;
         const result = await testLatency(list[i].url);
-        
-        // 根据结果显示
-        if (result === '超时') {
-            el.textContent = '超时';
-            el.className = 'latency-tag latency-timeout';
-        } else if (result === '失效') {
-            el.textContent = '失效';
-            el.className = 'latency-tag latency-timeout';
-        } else if (typeof result === 'number' && result > 0) {
-            // 显示延迟时间
-            el.textContent = result + ' ms';
-            el.className = 'latency-tag latency-success';
-        } else {
-            el.textContent = String(result);
-            el.className = 'latency-tag latency-timeout';
+        // 更新缓存后，立即更新对应卡片
+        const items = document.querySelectorAll('.site-item');
+        if (items[i]) {
+            const tag = items[i].querySelector('.latency-tag');
+            if (tag) {
+                if (result === '超时' || result === '失效') {
+                    tag.textContent = result;
+                    tag.className = `latency-tag latency-timeout`;
+                } else if (typeof result === 'number' && result > 0) {
+                    tag.textContent = result + ' ms';
+                    tag.className = 'latency-tag latency-success';
+                }
+            }
         }
     }
     
     if (btn) btn.disabled = false;
+    
+    // 保存缓存到 localStorage
+    saveLatencyCache();
+    
+    // 🔥 关键：重新渲染列表，让所有卡片从 latencyCache 读取最新数据
+    renderList();
+    
     showToast('测速完成');
 }
 
