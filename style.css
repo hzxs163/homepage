@@ -1,3 +1,10 @@
+/* ========== 缓存加载时的过渡效果 ========== */
+#siteListWrap {
+    opacity: 1;
+    transition: opacity 0.2s ease;
+}
+/* 数据更新时，不闪烁 */
+
 /* ========== 登录页默认隐藏，由 JS 控制 ========== */
 #loginPage {
     display: none !important;
