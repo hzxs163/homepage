@@ -4,8 +4,21 @@ body { background: #f0f3f9; padding: 40px 20px; transition: background 0.3s; min
 body.dark { background: #1a1b26; color: #e5e5e5; }
 
 /* ========== 容器 ========== */
-.container { max-width: 1200px; margin: 0 auto; background: #fff; border-radius: 16px; padding: 32px; position: relative; box-shadow: 0 2px 12px rgba(0,0,0,0.05); transition: background 0.3s, box-shadow 0.3s; width: 100%; }
-body.dark .container { background: #242535; box-shadow: 0 2px 12px rgba(0,0,0,0.2); }
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 16px;
+    padding: 20px 32px 32px 32px;
+    position: relative;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+    transition: background 0.3s, box-shadow 0.3s;
+    width: 100%;
+}
+body.dark .container {
+    background: #242535;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+}
 
 /* ========== 登录页 ========== */
 #loginPage { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
@@ -32,10 +45,17 @@ body.dark .login-error { color: #f87171; }
 
 /* ========== 主页面顶栏 ========== */
 .main-header {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-bottom: 20px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: #fff;
+    padding: 8px 0 12px 0;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #e8f8f0;
+}
+body.dark .main-header {
+    background: #242535;
+    border-bottom-color: #404258;
 }
 
 .header-top {
