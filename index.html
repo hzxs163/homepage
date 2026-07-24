@@ -8,6 +8,8 @@
 <!-- ===== 🔥 预加载关键资源 ===== -->
 <link rel="preload" href="style.css" as="style">
 <link rel="preload" href="app.js" as="script">
+<link rel="preload" href="api.js" as="script">
+<link rel="preload" href="auth.js" as="script">
 
 <!-- ========== 📚 Favicon ========== -->
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
@@ -188,7 +190,7 @@
 <script src="app.js"></script>
 <script src="admin.js"></script>
 
-<!-- ==================== Service Worker 注册（离线缓存） ==================== -->
+<!-- ==================== 🔥 Service Worker 注册（离线缓存） ==================== -->
 <script>
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js')
