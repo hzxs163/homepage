@@ -1266,7 +1266,7 @@ async function extractFromClipboard() {
 
 async function testLatency(url) {
     const start = performance.now();
-    const timeout = 3000;
+    const timeout = 8000;
     let timer = null; // 🔥 在 try 外部定义，确保 catch 能访问
     
     try {
