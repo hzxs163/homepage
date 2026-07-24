@@ -531,18 +531,40 @@ body.dark .site-item.sortable-drag { box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
     .site-item { padding: 14px 10px; gap: 10px; }
     .site-icon { width: 48px; height: 48px; }
 
-    /* 顶栏布局：搜索组占满 */
-    .header-top { flex-direction: column; align-items: stretch; gap: 8px; }
-    .search-group { min-width: unset; width: 100%; }
-    .search-input { min-width: unset; }
+    /* 顶栏布局：搜索框和用户按钮水平排列 */
+    .header-top { 
+        flex-direction: row; 
+        align-items: center; 
+        gap: 8px; 
+        flex-wrap: nowrap;
+    }
+    .search-group { 
+        min-width: 0; 
+        flex: 1; 
+        width: auto;
+    }
+    .search-input { 
+        min-width: 0; 
+        width: 100%;
+        font-size: 14px;
+        padding: 0 36px 0 12px;
+    }
+    .sort-select {
+        font-size: 12px;
+        padding: 4px 8px;
+        height: 34px;
+        max-width: 100px;
+        flex-shrink: 0;
+    }
 
-    .user-menu { margin-left: auto; align-self: flex-end; }
+    .user-menu { 
+        flex-shrink: 0; 
+        margin-left: 0;
+        align-self: center;
+    }
 
     /* 返回顶部 */
     .back-to-top { width: 48px; height: 48px; bottom: 20px; right: 20px; font-size: 20px; }
-
-    /* 排序下拉 */
-    .sort-select { font-size: 13px; padding: 6px 12px; height: 38px; max-width: 140px; }
 
     /* 容器 */
     .container { padding: 16px 14px; }
