@@ -184,17 +184,17 @@ function toggleTheme() {
 }
 
 // ============================================================
-//  数据加载
+//  数据加载（支持排序）
 // ============================================================
 
-async function loadLinks() {
+async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
     const statusEl = document.getElementById('syncStatus');
     if (statusEl) statusEl.textContent = '● 加载中...';
 
     showSkeleton();
 
     try {
-        const data = await API.getLinks();
+        const data = await API.getLinks(sortBy, order);
 
         if (!Array.isArray(data)) {
             throw new Error('返回的数据不是数组');
@@ -222,7 +222,8 @@ async function loadLinks() {
                 click_count: item.click_count || 0
             };
         });
-        siteList.sort((a, b) => (a.sort || 0) - (b.sort || 0));
+        
+        // 后端已排序，前端不再排序
         localStorage.setItem('siteList', JSON.stringify(siteList));
         if (statusEl) {
             statusEl.textContent = '● 云端模式 ✅';
@@ -453,7 +454,7 @@ function getFilteredList() {
             (s.tags && Array.isArray(s.tags) && s.tags.some(t => (t || '').toLowerCase().includes(keyword)))
         );
     }
-    list.sort((a, b) => (a.sort || 0) - (b.sort || 0));
+    // 后端已排序，前端只做筛选，不重新排序
     return list;
 }
 
@@ -571,9 +572,6 @@ function renderList() {
 
         // ---- 悬停提示 ----
         div.title = '点击打开链接';
-
-        // ---- 点击打开链接（委托事件统一处理，卡片自身不再绑定） ----
-        // 删除卡片自己的点击事件，由 wrap 的委托事件统一处理
 
         // ---- 右键菜单 ----
         div.addEventListener('contextmenu', function(e) {
@@ -1363,16 +1361,52 @@ function initKeyboardShortcuts() {
 }
 
 // ============================================================
+//  排序切换
+// ============================================================
+
+function initSortSelector() {
+    const sortSelect = document.getElementById('sortSelect');
+    if (!sortSelect) return;
+    
+    // 恢复排序偏好
+    const saved = localStorage.getItem('sortPreference');
+    if (saved) {
+        sortSelect.value = saved;
+    }
+    
+    sortSelect.addEventListener('change', function() {
+        const [sortBy, order] = this.value.split(':');
+        localStorage.setItem('sortPreference', this.value);
+        loadLinks(sortBy, order);
+    });
+}
+
+// ============================================================
 //  初始化
 // ============================================================
 
 function initApp() {
     loadTagSortOrder();
-    loadActiveTag();  // 恢复上次选中的标签
+    loadActiveTag();
     initTheme();
     initTagsFilter();
     loadLatencyCache();
-    loadLinks();
+    initSortSelector();
+    
+    // 恢复排序偏好并加载数据
+    const sortSelect = document.getElementById('sortSelect');
+    if (sortSelect) {
+        const saved = localStorage.getItem('sortPreference');
+        if (saved) {
+            const [sortBy, order] = saved.split(':');
+            loadLinks(sortBy, order);
+        } else {
+            loadLinks();
+        }
+    } else {
+        loadLinks();
+    }
+    
     window.addEventListener('scroll', handleScroll);
     handleScroll();
     const lockBtn = document.getElementById('dragLockBtn');
