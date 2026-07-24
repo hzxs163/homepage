@@ -315,6 +315,4 @@ const API_BASE = 'https://nav-api.你的用户名.workers.dev/api';
 
 **[⬆ 回到顶部](#-我的导航---个人网址导航系统)**
 
-Made with ❤️
-
 </div>
