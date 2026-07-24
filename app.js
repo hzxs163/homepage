@@ -91,6 +91,48 @@ function saveTagSortOrder() {
 }
 
 // ============================================================
+//  记住上次选中的标签
+// ============================================================
+
+function loadActiveTag() {
+    const saved = localStorage.getItem('activeTag');
+    if (saved && saved !== 'all') {
+        // 验证该标签是否还存在
+        const tags = getAllTags();
+        if (tags.includes(saved)) {
+            activeTag = saved;
+            return true;
+        }
+    }
+    activeTag = 'all';
+    return false;
+}
+
+function saveActiveTag(tag) {
+    localStorage.setItem('activeTag', tag);
+}
+
+// ============================================================
+//  记住滚动位置
+// ============================================================
+
+function saveScrollPosition() {
+    const mainPage = document.getElementById('mainPage');
+    if (mainPage) {
+        localStorage.setItem('scrollPosition', String(window.scrollY));
+    }
+}
+
+function restoreScrollPosition() {
+    const saved = localStorage.getItem('scrollPosition');
+    if (saved) {
+        setTimeout(() => {
+            window.scrollTo(0, parseInt(saved));
+        }, 100);
+    }
+}
+
+// ============================================================
 //  骨架屏
 // ============================================================
 
@@ -209,6 +251,9 @@ async function loadLinks() {
     }
     hideSkeleton();
     renderAll();
+    
+    // 恢复滚动位置
+    restoreScrollPosition();
 }
 
 // ============================================================
@@ -268,6 +313,7 @@ function renderTagsFilter() {
         document.querySelectorAll('.tag-item').forEach(t => t.classList.remove('active'));
         allTag.classList.add('active');
         activeTag = 'all';
+        saveActiveTag('all');
         renderList();
     };
     tagsList.appendChild(allTag);
@@ -283,6 +329,7 @@ function renderTagsFilter() {
             document.querySelectorAll('.tag-item').forEach(t => t.classList.remove('active'));
             item.classList.add('active');
             activeTag = tag;
+            saveActiveTag(tag);
             renderList();
         };
         tagsList.appendChild(item);
@@ -1269,10 +1316,50 @@ function handleScroll() {
     if (btn) {
         btn.classList.toggle('show', window.scrollY > SCROLL_THRESHOLD);
     }
+    // 保存滚动位置（每500ms保存一次，避免频繁写入）
+    if (document.getElementById('mainPage') && document.getElementById('mainPage').style.display !== 'none') {
+        clearTimeout(window._scrollSaveTimer);
+        window._scrollSaveTimer = setTimeout(saveScrollPosition, 500);
+    }
 }
 
 function backToTop() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ============================================================
+//  键盘快捷键
+// ============================================================
+
+function initKeyboardShortcuts() {
+    document.addEventListener('keydown', function(e) {
+        // Ctrl+K 或 Cmd+K → 聚焦搜索框
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+            e.preventDefault();
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.focus();
+                searchInput.select();
+            }
+        }
+        
+        // ESC → 关闭弹窗
+        if (e.key === 'Escape') {
+            const addModal = document.getElementById('addModal');
+            if (addModal && addModal.classList.contains('show')) {
+                closeModal();
+            }
+            const adminModal = document.getElementById('adminModal');
+            if (adminModal && adminModal.classList.contains('show')) {
+                closeAdminPanel();
+            }
+            // 如果搜索框有内容且有焦点，清除内容并失焦
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput && document.activeElement === searchInput) {
+                searchInput.blur();
+            }
+        }
+    });
 }
 
 // ============================================================
@@ -1281,6 +1368,7 @@ function backToTop() {
 
 function initApp() {
     loadTagSortOrder();
+    loadActiveTag();  // 恢复上次选中的标签
     initTheme();
     initTagsFilter();
     loadLatencyCache();
@@ -1292,6 +1380,7 @@ function initApp() {
         lockBtn.textContent = '🔒';
         lockBtn.classList.add('locked');
     }
+    initKeyboardShortcuts();
 }
 window.initApp = initApp;
 
