@@ -136,15 +136,16 @@ function restoreScrollPosition() {
 //  骨架屏
 // ============================================================
 
-// ============================================================
-//  骨架屏
-// ============================================================
-
 function showSkeleton() {
     const wrap = document.getElementById('siteListWrap');
     if (!wrap) return;
     
-    // 🔥 如果有缓存，不显示骨架屏
+    // 🔥 如果有卡片 HTML 缓存，不显示骨架屏
+    if (localStorage.getItem('cardHTML')) {
+        return;
+    }
+    
+    // 🔥 如果有数据缓存，不显示骨架屏
     if (localStorage.getItem('siteList')) {
         return;
     }
@@ -165,12 +166,14 @@ function showSkeleton() {
     wrap.innerHTML = skeletonHtml;
 }
 
-// 🔥 新增：hideSkeleton 函数
 function hideSkeleton() {
     isLoading = false;
     const wrap = document.getElementById('siteListWrap');
     if (wrap) {
-        wrap.innerHTML = '';
+        // 🔥 只有当内容是骨架时才清空
+        if (wrap.querySelector('.skeleton-item')) {
+            wrap.innerHTML = '';
+        }
     }
 }
 
@@ -195,18 +198,25 @@ function toggleTheme() {
 }
 
 // ============================================================
-//  数据加载（支持排序）
-// ============================================================
-
-// ============================================================
-//  优化版数据加载 - 秒开策略
+//  优化版数据加载 - 秒开策略 + 卡片HTML缓存
 // ============================================================
 
 async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
     const statusEl = document.getElementById('syncStatus');
     let hasCache = false;
+    const wrap = document.getElementById('siteListWrap');
     
-    // ===== 第一步：立即从 localStorage 读取缓存，秒开 =====
+    // ===== 第一步：秒开 - 恢复卡片 HTML 缓存 =====
+    const cardHTML = localStorage.getItem('cardHTML');
+    if (cardHTML && wrap) {
+        // 🔥 直接把卡片 HTML 插入，用户瞬间看到内容
+        wrap.innerHTML = cardHTML;
+        if (statusEl) statusEl.textContent = '● 缓存模式 ⚡';
+        // 恢复滚动位置
+        restoreScrollPosition();
+    }
+    
+    // ===== 第二步：读取数据缓存 =====
     const cached = localStorage.getItem('siteList');
     if (cached) {
         try {
@@ -214,26 +224,26 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
             if (Array.isArray(parsed) && parsed.length > 0) {
                 siteList = parsed;
                 hasCache = true;
-                
-                // ✅ 立即渲染，用户马上看到内容
-                hideSkeleton();
-                renderAll();
-                restoreScrollPosition();
-                
-                if (statusEl) statusEl.textContent = '● 缓存模式 ⚡';
+                // 如果没有卡片 HTML 缓存，才需要渲染
+                if (!cardHTML) {
+                    hideSkeleton();
+                    renderAll();
+                    restoreScrollPosition();
+                }
+                if (statusEl && !cardHTML) statusEl.textContent = '● 缓存模式 ⚡';
             }
         } catch { }
     }
     
     // 没有缓存才显示骨架屏
-    if (!hasCache) {
+    if (!hasCache && !cardHTML) {
         showSkeleton();
         if (statusEl) statusEl.textContent = '● 加载中...';
     } else {
-        if (statusEl) statusEl.textContent = '● 更新中...';
+        if (statusEl && !cardHTML) statusEl.textContent = '● 更新中...';
     }
     
-    // ===== 第二步：后台静默请求最新数据 =====
+    // ===== 第三步：后台静默请求最新数据 =====
     try {
         const data = await API.getLinks(sortBy, order);
         
@@ -260,7 +270,7 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
         
         localStorage.setItem('siteList', JSON.stringify(siteList));
         
-        // 数据有变化才重新渲染
+        // 数据更新后重新渲染（会覆盖缓存的 HTML）
         hideSkeleton();
         renderAll();
         restoreScrollPosition();
@@ -269,13 +279,13 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
         
     } catch (err) {
         console.error('后台更新失败:', err);
-        if (!hasCache) {
+        if (!hasCache && !cardHTML) {
             siteList = [];
             hideSkeleton();
             renderAll();
             showToast('加载数据失败，请刷新重试');
         }
-        if (statusEl) statusEl.textContent = hasCache ? '● 缓存模式' : '● 无数据';
+        if (statusEl) statusEl.textContent = hasCache || cardHTML ? '● 缓存模式' : '● 无数据';
     }
 }
 
@@ -647,6 +657,15 @@ function renderList() {
     });
 
     wrap.appendChild(frag);
+
+    // ===== 🔥 保存卡片 HTML 到 localStorage（预渲染缓存） =====
+    try {
+        const cardHTML = wrap.innerHTML;
+        localStorage.setItem('cardHTML', cardHTML);
+        localStorage.setItem('cardHTMLTime', String(Date.now()));
+    } catch (e) {
+        // 存储失败不影响功能
+    }
 
     // ===== 委托点击事件（只绑定一次，统一处理所有卡片点击） =====
     if (!wrap._clickBound) {
