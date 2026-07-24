@@ -170,7 +170,7 @@ INSERT OR IGNORE INTO users (username, password, role) VALUES ('admin', 'admin12
 ### 前端配置 (`api.js`)
 
 ```javascript
-const API_BASE = 'https://navapi.wkm.kdns.fr/api';
+const API_BASE = 'https://nav-api.你的用户名.workers.dev/api';
 ```
 
 修改为你自己的 Worker 地址。
