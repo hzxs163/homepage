@@ -553,7 +553,8 @@ body.dark .site-item.sortable-drag { box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
         font-size: 12px;
         padding: 4px 6px;
         height: 34px;
-        max-width: 75px;
+        max-width: 65px;
+        min-width: 0;        /* 关键：覆盖 PC 端的 min-width */
         flex-shrink: 0;
         width: auto;         /* 让宽度由内容决定，但不超过 max-width */
     }
