@@ -1303,20 +1303,34 @@ async function testLatency(url) {
 async function batchTestLatency() {
     const list = getFilteredList();
     if (!list.length) { showToast('暂无链接'); return; }
-    showToast('测速中...');
     
-    // 禁用按钮防止重复点击
     const btn = document.getElementById('refreshBtn');
     if (btn) btn.disabled = true;
     
-    // 逐个测速，避免并发过多
+    // 获取所有卡片元素
+    const items = document.querySelectorAll('.site-item');
+    
+    // 逐个测速
     for (let i = 0; i < list.length; i++) {
-        const result = await testLatency(list[i].url);
-        // 更新缓存后，立即更新对应卡片
-        const items = document.querySelectorAll('.site-item');
-        if (items[i]) {
-            const tag = items[i].querySelector('.latency-tag');
+        const url = list[i].url;
+        const item = items[i];
+        
+        if (item) {
+            const tag = item.querySelector('.latency-tag');
             if (tag) {
+                // 1. 先显示"测速中"
+                tag.textContent = '测速中';
+                tag.className = 'latency-tag latency-loading';
+            }
+        }
+        
+        // 2. 执行测速（testLatency 内部会更新 latencyCache）
+        const result = await testLatency(url);
+        
+        if (item) {
+            const tag = item.querySelector('.latency-tag');
+            if (tag) {
+                // 3. 测速完成，立即更新这个卡片
                 if (result === '超时' || result === '失效') {
                     tag.textContent = result;
                     tag.className = `latency-tag latency-timeout`;
@@ -1330,11 +1344,12 @@ async function batchTestLatency() {
     
     if (btn) btn.disabled = false;
     
-    // 保存缓存到 localStorage
+    // 保存缓存
     saveLatencyCache();
     
-    // 🔥 关键：重新渲染列表，让所有卡片从 latencyCache 读取最新数据
-    renderList();
+    // 可选：只更新缓存，不重新渲染整个列表（避免闪烁）
+    // 如果觉得卡片状态不一致，可以调用 renderList()
+    // 但为了更好的体验，这里不重新渲染，因为每个卡片已经实时更新了
     
     showToast('测速完成');
 }
