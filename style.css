@@ -376,6 +376,9 @@ body.dark .tag-item.all:hover { background: #475569; }
     transition: box-shadow 0.2s, transform 0.2s;
     cursor: grab;
     min-width: 0;
+    user-select: none;           /* 禁止选中文字 */
+    -webkit-touch-callout: none;  /* 禁止长按弹出系统菜单 */
+    -webkit-user-select: none;    /* Safari 兼容 */
 }
 
 body.dark .site-item { background: #343541; border-color: #404258; }
