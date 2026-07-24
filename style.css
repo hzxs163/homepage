@@ -551,10 +551,11 @@ body.dark .site-item.sortable-drag { box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
     }
     .sort-select {
         font-size: 12px;
-        padding: 4px 8px;
+        padding: 4px 6px;
         height: 34px;
         max-width: 75px;
         flex-shrink: 0;
+        width: auto;         /* 让宽度由内容决定，但不超过 max-width */
     }
 
     .user-menu { 
