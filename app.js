@@ -571,16 +571,8 @@ function renderList() {
 
     wrap.appendChild(frag);
 
-    // 备用委托点击
-    wrap.addEventListener('click', function(e) {
-        const item = e.target.closest('.site-item');
-        if (item) {
-            const url = item.dataset.url;
-            if (url) {
-                window.open(url, '_blank');
-            }
-        }
-    });
+
+    
 
     setTimeout(() => {
         if (!isDragLocked) initSortableDrag();
