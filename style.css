@@ -553,7 +553,7 @@ body.dark .site-item.sortable-drag { box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
         font-size: 12px;
         padding: 4px 8px;
         height: 34px;
-        max-width: 100px;
+        max-width: 75px;
         flex-shrink: 0;
     }
 
