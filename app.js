@@ -198,13 +198,14 @@ function toggleTheme() {
 }
 
 // ============================================================
-//  优化版数据加载 - 秒开策略 + 卡片HTML缓存
+//  优化版数据加载 - 秒开策略 + 卡片HTML缓存 + 标签缓存
 // ============================================================
 
 async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
     const statusEl = document.getElementById('syncStatus');
     let hasCache = false;
     const wrap = document.getElementById('siteListWrap');
+    const tagsList = document.getElementById('tagsList');
     
     // ===== 第一步：秒开 - 恢复卡片 HTML 缓存 =====
     const cardHTML = localStorage.getItem('cardHTML');
@@ -214,6 +215,14 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
         if (statusEl) statusEl.textContent = '● 缓存模式 ⚡';
         // 恢复滚动位置
         restoreScrollPosition();
+    }
+    
+    // ===== 🔥 秒开 - 恢复标签 HTML 缓存 =====
+    const tagsHTML = localStorage.getItem('tagsHTML');
+    if (tagsHTML && tagsList) {
+        tagsList.innerHTML = tagsHTML;
+        // 重新绑定标签点击事件
+        rebindTagEvents();
     }
     
     // ===== 第二步：读取数据缓存 =====
@@ -287,6 +296,35 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
         }
         if (statusEl) statusEl.textContent = hasCache || cardHTML ? '● 缓存模式' : '● 无数据';
     }
+}
+
+// ============================================================
+//  重新绑定标签事件
+// ============================================================
+
+function rebindTagEvents() {
+    const tagsList = document.getElementById('tagsList');
+    if (!tagsList) return;
+    
+    tagsList.querySelectorAll('.tag-item').forEach(item => {
+        // 移除旧事件（如果有）
+        const newItem = item.cloneNode(true);
+        item.parentNode.replaceChild(newItem, item);
+        
+        // 绑定新事件
+        newItem.onclick = function() {
+            if (isTagSortMode) return;
+            document.querySelectorAll('.tag-item').forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+            activeTag = this.dataset.tag;
+            saveActiveTag(activeTag);
+            renderList();
+            if (isMobileDevice()) {
+                const wrap = document.getElementById('tagsFilterWrap');
+                if (wrap) wrap.classList.remove('expanded');
+            }
+        };
+    });
 }
 
 // ============================================================
@@ -408,6 +446,13 @@ function renderTagsFilter() {
 
     if (isTagSortMode) {
         initTagSortable();
+    }
+
+    // 🔥 保存标签 HTML 到 localStorage
+    try {
+        localStorage.setItem('tagsHTML', tagsList.innerHTML);
+    } catch (e) {
+        // 存储失败不影响功能
     }
 }
 
