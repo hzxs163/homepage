@@ -3,7 +3,7 @@
 // ============================================================
 
 const TOAST_DURATION = 2000;
-const REQUEST_TIMEOUT = 5000;
+const REQUEST_TIMEOUT = 3000;
 const SCROLL_THRESHOLD = 300;
 
 let siteList = [];
@@ -537,7 +537,7 @@ function renderList() {
                 '</div>';
         }
 
-        // ===== 测速显示（支持状态码） =====
+        // ===== 测速显示 =====
         let latencyText = '未测速';
         let latencyClass = '';
         const url = site.url || '';
@@ -546,19 +546,16 @@ function renderList() {
             if (result === '超时') {
                 latencyText = '超时';
                 latencyClass = 'latency-timeout';
-            } else if (result === '重定向') {
-                latencyText = '↪ 重定向';
-                latencyClass = 'latency-warning';
-            } else if (typeof result === 'number') {
-                if (result >= 200 && result < 300) {
-                    latencyText = result + ' ms';
-                    latencyClass = 'latency-success';
-                } else {
-                    latencyText = '状态 ' + result;
-                    latencyClass = 'latency-timeout';
-                }
+            } else if (result === '失效') {
+                latencyText = '失效';
+                latencyClass = 'latency-timeout';
+            } else if (typeof result === 'number' && result > 0) {
+                // 只显示延迟时间（毫秒）
+                latencyText = result + ' ms';
+                latencyClass = 'latency-success';
             } else {
                 latencyText = String(result);
+                latencyClass = 'latency-timeout';
             }
         }
 
@@ -1264,12 +1261,12 @@ async function extractFromClipboard() {
 }
 
 // ============================================================
-//  测速（返回状态码或延迟时间）
+//  测速（返回延迟时间或状态）
 // ============================================================
 
 async function testLatency(url) {
     const start = performance.now();
-    const timeout = 5000;
+    const timeout = 3000;
     
     try {
         const controller = new AbortController();
@@ -1284,22 +1281,16 @@ async function testLatency(url) {
         clearTimeout(timer);
         const latency = Math.round(performance.now() - start);
         
-        // 根据状态码判断
-        if (res.status >= 200 && res.status < 300) {
-            // 200-299：成功
+        // 只有 200-399 算成功，记录延迟时间
+        if (res.status >= 200 && res.status < 400) {
             latencyCache[url] = latency;
             saveLatencyCache();
             return latency;
-        } else if (res.status >= 300 && res.status < 400) {
-            // 301/302 重定向：算成功但显示"重定向"
-            latencyCache[url] = '重定向';
-            saveLatencyCache();
-            return '重定向';
         } else {
-            // 404, 403, 500 等
-            latencyCache[url] = res.status;
+            // 其他状态码统一显示为 "失效"
+            latencyCache[url] = '失效';
             saveLatencyCache();
-            return res.status;
+            return '失效';
         }
     } catch (err) {
         clearTimeout(timer);
@@ -1336,17 +1327,16 @@ async function batchTestLatency() {
         if (result === '超时') {
             el.textContent = '超时';
             el.className = 'latency-tag latency-timeout';
-        } else if (result === '重定向') {
-            el.textContent = '↪ 重定向';
-            el.className = 'latency-tag latency-warning';
-        } else if (typeof result === 'number') {
-            if (result >= 200 && result < 300) {
-                el.textContent = result + ' ms';
-                el.className = 'latency-tag latency-success';
-            } else {
-                el.textContent = '状态 ' + result;
-                el.className = 'latency-tag latency-timeout';
-            }
+        } else if (result === '失效') {
+            el.textContent = '失效';
+            el.className = 'latency-tag latency-timeout';
+        } else if (typeof result === 'number' && result > 0) {
+            // 显示延迟时间
+            el.textContent = result + ' ms';
+            el.className = 'latency-tag latency-success';
+        } else {
+            el.textContent = String(result);
+            el.className = 'latency-tag latency-timeout';
         }
     }
     
@@ -1557,13 +1547,6 @@ function loadLatencyCache() {
         const saved = localStorage.getItem('latencyCache');
         if (saved) {
             latencyCache = JSON.parse(saved);
-            // 兼容旧数据：如果是数字且小于200，可能是延迟时间
-            for (const key in latencyCache) {
-                const val = latencyCache[key];
-                if (typeof val === 'number' && val > 0 && val < 200) {
-                    // 可能是延迟时间，保留
-                }
-            }
         }
     } catch { latencyCache = {}; }
 }
