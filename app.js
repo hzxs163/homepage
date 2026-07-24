@@ -1261,58 +1261,12 @@ async function extractFromClipboard() {
 }
 
 // ============================================================
-//  测速（返回延迟时间或状态）- 修复 timer 作用域问题
+//  测速（使用 no-cors 模式 - 可测内网）
 // ============================================================
 
 async function testLatency(url) {
     const start = performance.now();
-    const timeout = 8000;
-    let timer = null; // 🔥 在 try 外部定义，确保 catch 能访问
-    
-    try {
-        const controller = new AbortController();
-        timer = setTimeout(() => controller.abort(), timeout);
-        
-        const res = await fetch(url, {
-            method: 'GET',
-            cache: 'no-cache',
-            signal: controller.signal
-        });
-        
-        clearTimeout(timer);
-        const latency = Math.round(performance.now() - start);
-        
-        // 只有 200-399 算成功，记录延迟时间
-        if (res.status >= 200 && res.status < 400) {
-            latencyCache[url] = latency;
-            saveLatencyCache();
-            return latency;
-        } else {
-            // 其他状态码统一显示为 "失效"
-            latencyCache[url] = '失效';
-            saveLatencyCache();
-            return '失效';
-        }
-    } catch (err) {
-        clearTimeout(timer);
-        // 超时或网络错误
-        latencyCache[url] = '超时';
-        saveLatencyCache();
-        return '超时';
-    }
-}
-
-// ============================================================
-//  批量测速 - 逐卡实时更新
-// ============================================================
-
-// ============================================================
-//  测速（返回延迟时间或状态）- 替换为图片加载方式
-// ============================================================
-
-async function testLatency(url) {
-    const start = performance.now();
-    const timeout = 8000;
+    const timeout = 3000; // 可调整
     
     if (!url || !url.startsWith('http')) {
         latencyCache[url] = '失效';
@@ -1320,57 +1274,30 @@ async function testLatency(url) {
         return '失效';
     }
     
-    return new Promise((resolve) => {
-        let resolved = false;
-        const timer = setTimeout(() => {
-            if (!resolved) {
-                resolved = true;
-                latencyCache[url] = '超时';
-                saveLatencyCache();
-                resolve('超时');
-            }
-        }, timeout);
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
         
-        // 用图片加载 favicon.ico 测速
-        let iconUrl;
-        try {
-            const u = new URL(url);
-            iconUrl = `${u.protocol}//${u.hostname}/favicon.ico`;
-        } catch {
-            latencyCache[url] = '失效';
-            saveLatencyCache();
-            clearTimeout(timer);
-            resolve('失效');
-            return;
-        }
+        // 🔥 关键：使用 mode: 'no-cors'
+        await fetch(url, { 
+            method: 'HEAD', 
+            mode: 'no-cors', 
+            cache: 'no-cache', 
+            signal: controller.signal 
+        });
         
-        const img = new Image();
+        clearTimeout(timeoutId);
+        const latency = Math.round(performance.now() - start);
+        latencyCache[url] = latency;
+        saveLatencyCache();
+        return latency;
         
-        img.onload = function() {
-            if (!resolved) {
-                resolved = true;
-                clearTimeout(timer);
-                const latency = Math.round(performance.now() - start);
-                latencyCache[url] = latency;
-                saveLatencyCache();
-                resolve(latency);
-            }
-        };
-        img.onerror = function() {
-            if (!resolved) {
-                resolved = true;
-                clearTimeout(timer);
-                // favicon 加载失败，标记为"失效"
-                latencyCache[url] = '失效';
-                saveLatencyCache();
-                resolve('失效');
-            }
-        };
-        
-        img.src = iconUrl;
-    });
+    } catch (err) {
+        latencyCache[url] = '超时';
+        saveLatencyCache();
+        return '超时';
+    }
 }
-
 // ============================================================
 //  导入 / 导出
 // ============================================================
