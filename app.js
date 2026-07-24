@@ -1913,21 +1913,27 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 
 // ============================================================
-//  页面加载后自动登录（修复跳转登录页问题）
+//  页面加载后自动登录（优化版 - 无闪烁）
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', function() {
     var token = localStorage.getItem('token');
     var user = localStorage.getItem('user');
     
+    var loginPage = document.getElementById('loginPage');
+    var mainPage = document.getElementById('mainPage');
+    
+    // 主页面默认已显示（HTML中 style="display:block"）
+    // 先让用户看到缓存数据，同时异步检查登录状态
     if (token && user) {
         try {
             var userData = JSON.parse(user);
             if (userData.username) {
-                // 直接显示主页面
-                var loginPage = document.getElementById('loginPage');
-                var mainPage = document.getElementById('mainPage');
-                if (loginPage) loginPage.style.display = 'none';
+                // ✅ 已登录：主页面保持显示
+                if (loginPage) {
+                    loginPage.style.display = 'none';
+                    loginPage.classList.remove('show');
+                }
                 if (mainPage) mainPage.style.display = 'block';
                 
                 // 更新用户信息
@@ -1936,7 +1942,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (nameEl) nameEl.textContent = userData.username || '用户';
                 if (roleEl) roleEl.textContent = userData.role === 'admin' ? '管理员' : '普通';
                 
-                // 初始化应用
+                // 初始化应用（loadLinks 会先读缓存，秒开）
                 if (typeof initApp === 'function') {
                     initApp();
                 }
@@ -1945,10 +1951,11 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch(e) {}
     }
     
-    // 未登录：显示登录页
-    var loginPage = document.getElementById('loginPage');
-    var mainPage = document.getElementById('mainPage');
-    if (loginPage) loginPage.style.display = 'flex';
+    // ❌ 未登录：跳转到登录页
+    if (loginPage) {
+        loginPage.style.display = 'flex';
+        loginPage.classList.add('show');
+    }
     if (mainPage) mainPage.style.display = 'none';
 });
 
