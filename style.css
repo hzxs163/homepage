@@ -522,10 +522,10 @@ body.dark .site-item.sortable-drag { box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
     .site-list-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
 
     /* 字体大小 */
-    .site-name { font-size: 16px; }
-    .site-url { font-size: 13px; }
-    .site-tag { width: auto; font-size: 12px; padding: 2px 10px; }
-    .latency-tag { padding: 4px 8px; font-size: 13px; min-width: 56px; }
+    .site-name { font-size: 20px; }
+    .site-url { font-size: 14px; }
+    .site-tag { width: auto; font-size: 16px; padding: 2px 10px; }
+    .latency-tag { padding: 4px 8px; font-size: 16px; min-width: 56px; }
 
     /* 卡片内边距放大（点击区域） */
     .site-item { padding: 14px 10px; gap: 10px; }
