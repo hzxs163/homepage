@@ -489,6 +489,7 @@ body.dark .site-item.sortable-drag { box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
 
 /* ========== 移动端适配 ========== */
 @media (max-width: 768px) {
+    /* 标签栏 */
     .tags-filter-wrap { max-height: 36px; padding: 8px 16px; opacity: 0.8; }
     .tags-filter-wrap.expanded { max-height: 500px; opacity: 1; }
     .tags-filter-title { display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
@@ -497,36 +498,64 @@ body.dark .site-item.sortable-drag { box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
     .tags-filter-wrap.expanded .tags-filter-title::after { content: "↑"; }
     .tags-list { display: none; }
     .tags-filter-wrap.expanded .tags-list { display: flex; }
-    .site-list-grid { grid-template-columns: repeat(4, 1fr); gap: 10px; }
-    .btn-group { position: relative; top: 0; right: 0; margin-bottom: 0; }
-    .site-tag { width: 45px; }
-    .container { padding: 20px 15px; }
-    .site-item { padding: 12px 8px; }
-    .site-icon { width: 40px; height: 40px; }
+    
+    /* 卡片 2 列 */
+    .site-list-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    
+    /* 字体大小 */
+    .site-name { font-size: 15px; }
+    .site-url { font-size: 12px; }
+    .site-tag { width: auto; font-size: 11px; padding: 2px 10px; }
+    .latency-tag { padding: 4px 8px; font-size: 12px; min-width: 56px; }
+    
+    /* 卡片内边距放大（点击区域） */
+    .site-item { padding: 14px 10px; gap: 10px; }
+    .site-icon { width: 48px; height: 48px; }
+    
+    /* 按钮尺寸 */
+    .btn-group button { height: 44px; padding: 0 16px; font-size: 14px; }
+    .btn-group .drag-lock-btn,
+    .btn-group .theme-toggle-btn { width: 44px; }
+    
+    /* 顶栏布局：搜索框占满，按钮换行 */
+    .header-top { flex-direction: column; align-items: stretch; gap: 8px; }
+    .search-wrap { min-width: unset; width: 100%; }
+    .search-input { min-width: unset; }
+    .btn-group { width: 100%; justify-content: flex-start; }
+    .user-menu { margin-left: auto; align-self: flex-end; }
+    
+    /* 返回顶部 */
+    .back-to-top { width: 48px; height: 48px; bottom: 20px; right: 20px; font-size: 20px; }
+    
+    /* 排序下拉 */
+    .sort-select { font-size: 13px; padding: 6px 12px; height: 38px; max-width: 140px; }
+    
+    /* 容器 */
+    .container { padding: 16px 14px; }
+}
+
+@media (min-width: 769px) {
+    .tags-filter-title::after { display: none; }
+}
+
+@media (max-width: 992px) {
+    .site-list-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+@media (max-width: 480px) {
+    .site-list-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .btn-group { flex-wrap: wrap; gap: 6px; }
+    .btn-group button { padding: 0 12px; font-size: 13px; height: 40px; }
+    .container { padding: 12px 10px; }
+    .site-item { padding: 10px 8px; }
     .site-name { font-size: 14px; }
     .site-url { font-size: 11px; }
-    .latency-tag { padding: 4px 8px; font-size: 12px; min-width: 60px; }
-    .back-to-top { width: 45px; height: 45px; bottom: 20px; right: 20px; font-size: 18px; }
-    .header-top { flex-wrap: wrap; }
-    .user-menu { margin-left: auto; }
-    .sort-select {
-    font-size: 12px;
-    padding: 6px 10px;
-    height: 34px;
-    max-width: 120px;
-}
-}
-@media (min-width: 769px) { .tags-filter-title::after { display: none; } }
-@media (max-width: 1200px) { .site-list-grid { grid-template-columns: repeat(6, 1fr); } }
-@media (max-width: 992px) { .site-list-grid { grid-template-columns: repeat(4, 1fr); } }
-@media (max-width: 480px) {
-    .site-list-grid { grid-template-columns: repeat(4, 1fr); gap: 8px; }
-    .btn-group { flex-wrap: wrap; gap: 8px; }
-    .btn-group button { padding: 6px 12px; font-size: 13px; }
-    .container { padding: 15px 10px; }
-    .site-tag { width: 40px; font-size: 10px; }
+    .site-tag { font-size: 10px; padding: 2px 8px; }
+    .site-icon { width: 40px; height: 40px; font-size: 20px; }
+    .latency-tag { font-size: 11px; min-width: 50px; padding: 3px 6px; }
     .modal-footer { flex-wrap: wrap; justify-content: stretch; }
     .modal-footer button { flex: 1; }
-    .search-input { font-size: 14px; padding: 10px 12px; }
+    .search-input { font-size: 14px; padding: 8px 12px; height: 38px; }
     .user-btn .user-name { max-width: 50px; font-size: 13px; }
+    .sort-select { font-size: 12px; padding: 4px 10px; height: 34px; max-width: 120px; }
 }
