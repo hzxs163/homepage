@@ -1261,16 +1261,17 @@ async function extractFromClipboard() {
 }
 
 // ============================================================
-//  测速（返回延迟时间或状态）
+//  测速（返回延迟时间或状态）- 修复 timer 作用域问题
 // ============================================================
 
 async function testLatency(url) {
     const start = performance.now();
     const timeout = 3000;
+    let timer = null; // 🔥 在 try 外部定义，确保 catch 能访问
     
     try {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeout);
+        timer = setTimeout(() => controller.abort(), timeout);
         
         const res = await fetch(url, {
             method: 'GET',
@@ -1294,45 +1295,62 @@ async function testLatency(url) {
         }
     } catch (err) {
         clearTimeout(timer);
+        // 超时或网络错误
         latencyCache[url] = '超时';
         saveLatencyCache();
         return '超时';
     }
 }
 
+// ============================================================
+//  批量测速 - 逐卡实时更新
+// ============================================================
+
 async function batchTestLatency() {
     const list = getFilteredList();
     if (!list.length) { showToast('暂无链接'); return; }
-    showToast('测速中...');
     
     const btn = document.getElementById('refreshBtn');
     if (btn) btn.disabled = true;
     
-    const items = document.querySelectorAll('.site-item');
+    // 获取所有卡片元素
+    const allItems = document.querySelectorAll('.site-item');
     
-    for (let i = 0; i < list.length; i++) {
-        const url = list[i].url;
-        const item = items[i];
-        
-        if (item) {
+    // 先让所有卡片显示"测速中"
+    allItems.forEach((item, index) => {
+        if (index < list.length) {
             const tag = item.querySelector('.latency-tag');
             if (tag) {
                 tag.textContent = '测速中';
                 tag.className = 'latency-tag latency-loading';
             }
         }
+    });
+    
+    showToast('测速中...');
+    
+    // 逐个测速，每测完一个立即更新对应卡片
+    for (let i = 0; i < list.length; i++) {
+        const url = list[i].url;
         
-        const result = await testLatency(url);
+        // 执行测速
+        await testLatency(url);
         
-        if (item) {
-            const tag = item.querySelector('.latency-tag');
+        // 获取当前卡片（重新获取，避免 DOM 引用失效）
+        const items = document.querySelectorAll('.site-item');
+        if (items[i]) {
+            const tag = items[i].querySelector('.latency-tag');
             if (tag) {
+                const result = latencyCache[url];
                 if (result === '超时' || result === '失效') {
                     tag.textContent = result;
-                    tag.className = `latency-tag latency-timeout`;
+                    tag.className = 'latency-tag latency-timeout';
                 } else if (typeof result === 'number' && result > 0) {
                     tag.textContent = result + ' ms';
                     tag.className = 'latency-tag latency-success';
+                } else {
+                    tag.textContent = '未测速';
+                    tag.className = 'latency-tag';
                 }
             }
         }
