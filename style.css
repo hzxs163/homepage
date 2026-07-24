@@ -9,6 +9,11 @@ body {
 }
 body.dark { background: #1a1b26; color: #e5e5e5; }
 
+/* ========== 全局隐藏顶栏功能按钮（PC + 手机统一隐藏） ========== */
+.btn-group {
+    display: none !important;
+}
+
 /* ========== 容器 ========== */
 .container {
     max-width: 1200px;
@@ -516,11 +521,6 @@ body.dark .site-item.sortable-drag { box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
     .header-top { flex-direction: column; align-items: stretch; gap: 8px; }
     .search-wrap { min-width: unset; width: 100%; }
     .search-input { min-width: unset; }
-
-    /* ===== 隐藏外面的功能按钮，只保留下拉菜单里的 ===== */
-    .btn-group {
-        display: none !important;
-    }
 
     .user-menu { margin-left: auto; align-self: flex-end; }
 
