@@ -1,5 +1,5 @@
 // ============================================================
-//  主应用逻辑3
+//  主应用逻辑
 // ============================================================
 
 const TOAST_DURATION = 2000;
@@ -525,18 +525,8 @@ function renderList() {
         // ---- 悬停提示 ----
         div.title = '点击打开链接';
 
-        // ---- 点击打开链接 ----
-        div.addEventListener('click', function(e) {
-            if (isDragging || isMouseMoving) {
-                e.preventDefault();
-                return;
-            }
-            if (site.url) {
-                window.open(site.url, '_blank');
-            } else {
-                showToast('该链接地址无效');
-            }
-        });
+        // ---- 点击打开链接（委托事件统一处理，卡片自身不再绑定） ----
+        // 删除卡片自己的点击事件，由 wrap 的委托事件统一处理
 
         // ---- 右键菜单 ----
         div.addEventListener('contextmenu', function(e) {
@@ -571,8 +561,19 @@ function renderList() {
 
     wrap.appendChild(frag);
 
-
-    
+    // ===== 委托点击事件（只绑定一次，统一处理所有卡片点击） =====
+    if (!wrap._clickBound) {
+        wrap.addEventListener('click', function(e) {
+            const item = e.target.closest('.site-item');
+            if (item) {
+                const url = item.dataset.url;
+                if (url) {
+                    window.open(url, '_blank');
+                }
+            }
+        });
+        wrap._clickBound = true;
+    }
 
     setTimeout(() => {
         if (!isDragLocked) initSortableDrag();
