@@ -2,7 +2,7 @@
 
 <div align="center">
 
-🔖 **一个基于 Cloudflare 技术栈、支持多用户的个人网址导航系统**
+ **一个基于 Cloudflare 技术栈、支持多用户的个人网址导航系统**
 
 [![Cloudflare](https://img.shields.io/badge/Cloudflare-Workers%20%2B%20Pages%20%2B%20D1-orange.svg)](https://cloudflare.com)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
