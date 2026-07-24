@@ -34,10 +34,14 @@
 
     <!-- ========== 顶栏 ========== -->
     <div class="main-header">
-        <!-- 第一行：搜索框 + 功能按钮 + 用户菜单 -->
+        <!-- 第一行：搜索组 + 用户菜单 -->
         <div class="header-top">
-            <div class="search-wrap">
-                <input type="text" class="search-input" id="searchInput" placeholder="输入关键词搜索站点名称/地址/标签...">
+            <!-- 搜索组：搜索框 + 消除按钮 + 排序下拉 -->
+            <div class="search-group">
+                <div class="search-wrap">
+                    <input type="text" class="search-input" id="searchInput" placeholder="输入关键词搜索站点名称/地址/标签...">
+                    <button class="clear-search-btn hidden" id="clearSearchBtn">✕</button>
+                </div>
                 <select class="sort-select" id="sortSelect">
                     <option value="sort_order:ASC">默认排序</option>
                     <option value="click_count:DESC">点击量 ↓</option>
@@ -47,10 +51,9 @@
                     <option value="title:ASC">名称 A→Z</option>
                     <option value="title:DESC">名称 Z→A</option>
                 </select>
-                <button class="clear-search-btn hidden" id="clearSearchBtn">清除</button>
             </div>
 
-            <!-- 功能按钮（放在这里，移动端自动换行） -->
+            <!-- 功能按钮（全局隐藏，只在下拉菜单中显示） -->
             <div class="btn-group">
                 <button class="add-btn" id="addBtn">添加网址</button>
                 <button class="refresh-btn" id="refreshBtn">测速</button>
