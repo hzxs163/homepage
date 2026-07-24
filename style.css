@@ -139,6 +139,32 @@ body.dark .clear-search-btn:hover {
     display: none;
 }
 
+/* ========== 排序下拉菜单 ========== */
+.sort-select {
+    padding: 8px 14px;
+    height: 38px;
+    border: 1px solid #e8f8f0;
+    border-radius: 8px;
+    background: #fff;
+    color: #1f2937;
+    font-size: 13px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s;
+    flex-shrink: 0;
+}
+body.dark .sort-select {
+    background: #343541;
+    border-color: #404258;
+    color: #e5e5e5;
+}
+.sort-select:focus {
+    border-color: #00b866;
+}
+body.dark .sort-select:focus {
+    border-color: #10b981;
+}
+
 /* ========== 用户下拉菜单 ========== */
 .user-menu {
     display: flex;
@@ -483,6 +509,12 @@ body.dark .site-item.sortable-drag { box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
     .back-to-top { width: 45px; height: 45px; bottom: 20px; right: 20px; font-size: 18px; }
     .header-top { flex-wrap: wrap; }
     .user-menu { margin-left: auto; }
+    .sort-select {
+    font-size: 12px;
+    padding: 6px 10px;
+    height: 34px;
+    max-width: 120px;
+}
 }
 @media (min-width: 769px) { .tags-filter-title::after { display: none; } }
 @media (max-width: 1200px) { .site-list-grid { grid-template-columns: repeat(6, 1fr); } }
