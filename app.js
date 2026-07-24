@@ -1389,6 +1389,12 @@ async function testLatency(url) {
 //  批量测速 - 逐卡实时更新
 // ============================================================
 
+// ============================================================
+//  批量测速 - 使用 Web Worker（不阻塞主线程）
+// ============================================================
+
+let worker = null;
+
 async function batchTestLatency() {
     const list = getFilteredList();
     if (!list.length) { showToast('暂无链接'); return; }
@@ -1412,39 +1418,77 @@ async function batchTestLatency() {
     
     showToast('测速中...');
     
-    // 逐个测速，每测完一个立即更新对应卡片
-    for (let i = 0; i < list.length; i++) {
-        const url = list[i].url;
+    // 如果已有 Worker，先终止
+    if (worker) {
+        worker.terminate();
+        worker = null;
+    }
+    
+    // 创建新的 Worker
+    try {
+        worker = new Worker('worker.js');
+    } catch (err) {
+        showToast('Worker 创建失败，请刷新重试');
+        if (btn) btn.disabled = false;
+        return;
+    }
+    
+    // 监听 Worker 返回的结果
+    worker.addEventListener('message', function(e) {
+        const data = e.data;
         
-        // 执行测速
-        await testLatency(url);
-        
-        // 获取当前卡片（重新获取，避免 DOM 引用失效）
-        const items = document.querySelectorAll('.site-item');
-        if (items[i]) {
-            const tag = items[i].querySelector('.latency-tag');
-            if (tag) {
-                const result = latencyCache[url];
-                if (result === '超时') {
-                    tag.textContent = '超时';
-                    tag.className = 'latency-tag latency-timeout';
-                } else if (result === '失效') {
-                    tag.textContent = '失效';
-                    tag.className = 'latency-tag latency-timeout';
-                } else if (typeof result === 'number' && result > 0) {
-                    tag.textContent = result + ' ms';
-                    tag.className = 'latency-tag latency-success';
-                } else {
-                    tag.textContent = '未测速';
-                    tag.className = 'latency-tag';
+        if (data.type === 'result') {
+            const { index, url, latency } = data;
+            
+            // 更新缓存
+            if (latency === '超时' || latency === '失效') {
+                latencyCache[url] = latency;
+            } else if (typeof latency === 'number' && latency > 0) {
+                latencyCache[url] = latency;
+            }
+            saveLatencyCache();
+            
+            // 更新对应的卡片
+            const items = document.querySelectorAll('.site-item');
+            if (items[index]) {
+                const tag = items[index].querySelector('.latency-tag');
+                if (tag) {
+                    if (latency === '超时' || latency === '失效') {
+                        tag.textContent = latency;
+                        tag.className = 'latency-tag latency-timeout';
+                    } else if (typeof latency === 'number' && latency > 0) {
+                        tag.textContent = latency + ' ms';
+                        tag.className = 'latency-tag latency-success';
+                    } else {
+                        tag.textContent = '未测速';
+                        tag.className = 'latency-tag';
+                    }
                 }
             }
         }
-    }
+        
+        if (data.type === 'complete') {
+            if (btn) btn.disabled = false;
+            showToast('测速完成');
+            if (worker) {
+                worker.terminate();
+                worker = null;
+            }
+        }
+        
+        if (data.type === 'error') {
+            showToast('测速出错：' + data.message);
+            if (btn) btn.disabled = false;
+            if (worker) {
+                worker.terminate();
+                worker = null;
+            }
+        }
+    });
     
-    if (btn) btn.disabled = false;
-    saveLatencyCache();
-    showToast('测速完成');
+    // 发送测速任务到 Worker
+    const urls = list.map(site => site.url);
+    worker.postMessage({ urls });
 }
 
 // ============================================================
