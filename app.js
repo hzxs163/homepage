@@ -545,6 +545,10 @@ function getFilteredList() {
     return list;
 }
 
+// ============================================================
+//  renderList - 使用 requestAnimationFrame 批量更新 DOM + loading="lazy"
+// ============================================================
+
 function renderList() {
     if (isRendering) return;
 
@@ -573,168 +577,170 @@ function renderList() {
         return;
     }
 
-    const frag = document.createDocumentFragment();
-    const lazyItems = [];
+    // ===== 🔥 使用 requestAnimationFrame 批量更新 DOM =====
+    requestAnimationFrame(() => {
+        const frag = document.createDocumentFragment();
+        const lazyItems = [];
 
-    filtered.forEach((site) => {
-        const div = document.createElement('div');
-        div.className = `site-item ${isDragLocked ? 'locked' : ''}`;
-        if (isDragLocked) div.style.cursor = 'not-allowed';
-        div.setAttribute('data-url', site.url || '');
-        div.setAttribute('data-id', site.id || '');
+        filtered.forEach((site) => {
+            const div = document.createElement('div');
+            div.className = `site-item ${isDragLocked ? 'locked' : ''}`;
+            if (isDragLocked) div.style.cursor = 'not-allowed';
+            div.setAttribute('data-url', site.url || '');
+            div.setAttribute('data-id', site.id || '');
 
-        // ===== 图标渲染（首字母占位 + 懒加载） =====
-        let iconHtml = '';
-        if (site.icon && site.icon.length <= 2 && !site.icon.startsWith('http')) {
-            iconHtml = `<div class="site-icon" style="background:#00b866;">${site.icon}</div>`;
-        } else {
-            // 检查 localStorage 缓存
-            const cacheKey = 'icon_' + site.id;
-            const cached = localStorage.getItem(cacheKey);
-            
-            if (cached) {
-                // 有缓存 → 直接显示图标
-                iconHtml = `<div class="site-icon" style="background:transparent;"><img src="${cached}" alt="${site.name || '链接'}" style="width:100%;height:100%;object-fit:cover;"></div>`;
+            // ===== 图标渲染（首字母占位 + 懒加载） =====
+            let iconHtml = '';
+            if (site.icon && site.icon.length <= 2 && !site.icon.startsWith('http')) {
+                iconHtml = `<div class="site-icon" style="background:#00b866;">${site.icon}</div>`;
             } else {
-                // 无缓存 → 先显示首字母占位
-                const letter = (site.name || '链接').charAt(0).toUpperCase();
-                iconHtml = `<div class="site-icon" style="background:#00b866;font-size:24px;font-weight:bold;color:#fff;display:flex;align-items:center;justify-content:center;">${letter}</div>`;
-                // 记录到懒加载队列
-                lazyItems.push({ div, site });
-            }
-        }
-
-        let tagsHtml = '';
-        if (site.tags && Array.isArray(site.tags) && site.tags.length) {
-            const displayTags = site.tags.slice(0, 3);
-            const extraCount = site.tags.length - 3;
-            tagsHtml = '<div class="site-tags">' +
-                displayTags.map(t => `<span class="site-tag">${t || ''}</span>`).join('') +
-                (extraCount > 0 ? `<span class="site-tag" style="background:#e5e7eb;color:#6b7280;">+${extraCount}</span>` : '') +
-                '</div>';
-        }
-
-        // ===== 测速显示 =====
-        let latencyText = '未测速';
-        let latencyClass = '';
-        const url = site.url || '';
-        const result = latencyCache[url];
-        if (result !== undefined) {
-            if (result === '超时') {
-                latencyText = '超时';
-                latencyClass = 'latency-timeout';
-            } else if (result === '失效') {
-                latencyText = '失效';
-                latencyClass = 'latency-timeout';
-            } else if (typeof result === 'number' && result > 0) {
-                // 只显示延迟时间（毫秒）
-                latencyText = result + ' ms';
-                latencyClass = 'latency-success';
-            } else {
-                latencyText = String(result);
-                latencyClass = 'latency-timeout';
-            }
-        }
-
-        const siteName = site.name || '未命名';
-        const siteUrl = site.url || '';
-
-        div.innerHTML = iconHtml +
-            `<div class="latency-tag ${latencyClass}">${latencyText}</div>
-            <div class="site-info">
-                <div class="site-name">${siteName}</div>
-                <div class="site-url">${siteUrl}</div>
-                ${tagsHtml}
-            </div>`;
-
-        div.style.cursor = 'pointer';
-
-        // ---- 点击反馈：按下动画 ----
-        div.addEventListener('mousedown', function(e) {
-            if (e.button === 0) {
-                this.style.transform = 'scale(0.95)';
-                this.style.transition = 'transform 0.1s';
-            }
-        });
-        div.addEventListener('mouseup', function(e) {
-            if (e.button === 0) {
-                this.style.transform = 'scale(1)';
-                this.style.transition = 'transform 0.1s';
-            }
-        });
-        div.addEventListener('mouseleave', function() {
-            this.style.transform = 'scale(1)';
-            this.style.transition = 'transform 0.1s';
-        });
-
-        // ---- 悬停提示 ----
-        div.title = '点击打开链接';
-
-        // ---- 右键菜单 ----
-        div.addEventListener('contextmenu', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            showContextMenu(e.clientX, e.clientY, site.id, site.url);
-        });
-
-        // PC 长按编辑
-        div.addEventListener('mousedown', () => {
-            if (!isMobileDevice()) {
-                longPressTimer = setTimeout(() => openEditModal(site.id), 800);
-            }
-        });
-        div.addEventListener('mousemove', () => {
-            isMouseMoving = true;
-            clearTimeout(longPressTimer);
-        });
-        div.addEventListener('mouseup', () => clearTimeout(longPressTimer));
-        div.addEventListener('mouseleave', () => clearTimeout(longPressTimer));
-
-        // 移动端触屏收起标签
-        div.addEventListener('touchstart', () => {
-            const wrap2 = document.getElementById('tagsFilterWrap');
-            if (wrap2 && wrap2.classList.contains('expanded')) {
-                wrap2.classList.remove('expanded');
-            }
-        });
-
-        frag.appendChild(div);
-    });
-
-    wrap.appendChild(frag);
-
-    // ===== 🔥 保存卡片 HTML 到 localStorage（预渲染缓存） =====
-    try {
-        const cardHTML = wrap.innerHTML;
-        localStorage.setItem('cardHTML', cardHTML);
-        localStorage.setItem('cardHTMLTime', String(Date.now()));
-    } catch (e) {
-        // 存储失败不影响功能
-    }
-
-    // ===== 委托点击事件（只绑定一次，统一处理所有卡片点击） =====
-    if (!wrap._clickBound) {
-        wrap.addEventListener('click', function(e) {
-            const item = e.target.closest('.site-item');
-            if (item) {
-                const url = item.dataset.url;
-                if (url) {
-                    window.open(url, '_blank');
+                // 检查 localStorage 缓存
+                const cacheKey = 'icon_' + site.id;
+                const cached = localStorage.getItem(cacheKey);
+                
+                if (cached) {
+                    // 🔥 有缓存 → 直接显示图标 + loading="lazy"
+                    iconHtml = `<div class="site-icon" style="background:transparent;"><img src="${cached}" alt="${site.name || '链接'}" loading="lazy" style="width:100%;height:100%;object-fit:cover;"></div>`;
+                } else {
+                    // 无缓存 → 先显示首字母占位
+                    const letter = (site.name || '链接').charAt(0).toUpperCase();
+                    iconHtml = `<div class="site-icon" style="background:#00b866;font-size:24px;font-weight:bold;color:#fff;display:flex;align-items:center;justify-content:center;">${letter}</div>`;
+                    // 记录到懒加载队列
+                    lazyItems.push({ div, site });
                 }
             }
-        });
-        wrap._clickBound = true;
-    }
 
-    setTimeout(() => {
-        if (!isDragLocked) initSortableDrag();
-        isRendering = false;
-        
-        // ===== 启动懒加载图标 =====
-        if (lazyItems.length > 0) {
-            startLazyLoad(lazyItems);
+            let tagsHtml = '';
+            if (site.tags && Array.isArray(site.tags) && site.tags.length) {
+                const displayTags = site.tags.slice(0, 3);
+                const extraCount = site.tags.length - 3;
+                tagsHtml = '<div class="site-tags">' +
+                    displayTags.map(t => `<span class="site-tag">${t || ''}</span>`).join('') +
+                    (extraCount > 0 ? `<span class="site-tag" style="background:#e5e7eb;color:#6b7280;">+${extraCount}</span>` : '') +
+                    '</div>';
+            }
+
+            // ===== 测速显示 =====
+            let latencyText = '未测速';
+            let latencyClass = '';
+            const url = site.url || '';
+            const result = latencyCache[url];
+            if (result !== undefined) {
+                if (result === '超时') {
+                    latencyText = '超时';
+                    latencyClass = 'latency-timeout';
+                } else if (result === '失效') {
+                    latencyText = '失效';
+                    latencyClass = 'latency-timeout';
+                } else if (typeof result === 'number' && result > 0) {
+                    latencyText = result + ' ms';
+                    latencyClass = 'latency-success';
+                } else {
+                    latencyText = String(result);
+                    latencyClass = 'latency-timeout';
+                }
+            }
+
+            const siteName = site.name || '未命名';
+            const siteUrl = site.url || '';
+
+            div.innerHTML = iconHtml +
+                `<div class="latency-tag ${latencyClass}">${latencyText}</div>
+                <div class="site-info">
+                    <div class="site-name">${siteName}</div>
+                    <div class="site-url">${siteUrl}</div>
+                    ${tagsHtml}
+                </div>`;
+
+            div.style.cursor = 'pointer';
+
+            // ---- 点击反馈：按下动画 ----
+            div.addEventListener('mousedown', function(e) {
+                if (e.button === 0) {
+                    this.style.transform = 'scale(0.95)';
+                    this.style.transition = 'transform 0.1s';
+                }
+            });
+            div.addEventListener('mouseup', function(e) {
+                if (e.button === 0) {
+                    this.style.transform = 'scale(1)';
+                    this.style.transition = 'transform 0.1s';
+                }
+            });
+            div.addEventListener('mouseleave', function() {
+                this.style.transform = 'scale(1)';
+                this.style.transition = 'transform 0.1s';
+            });
+
+            // ---- 悬停提示 ----
+            div.title = '点击打开链接';
+
+            // ---- 右键菜单 ----
+            div.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                showContextMenu(e.clientX, e.clientY, site.id, site.url);
+            });
+
+            // PC 长按编辑
+            div.addEventListener('mousedown', () => {
+                if (!isMobileDevice()) {
+                    longPressTimer = setTimeout(() => openEditModal(site.id), 800);
+                }
+            });
+            div.addEventListener('mousemove', () => {
+                isMouseMoving = true;
+                clearTimeout(longPressTimer);
+            });
+            div.addEventListener('mouseup', () => clearTimeout(longPressTimer));
+            div.addEventListener('mouseleave', () => clearTimeout(longPressTimer));
+
+            // 移动端触屏收起标签
+            div.addEventListener('touchstart', () => {
+                const wrap2 = document.getElementById('tagsFilterWrap');
+                if (wrap2 && wrap2.classList.contains('expanded')) {
+                    wrap2.classList.remove('expanded');
+                }
+            });
+
+            frag.appendChild(div);
+        });
+
+        wrap.appendChild(frag);
+
+        // ===== 🔥 保存卡片 HTML 到 localStorage（预渲染缓存） =====
+        try {
+            const cardHTML = wrap.innerHTML;
+            localStorage.setItem('cardHTML', cardHTML);
+            localStorage.setItem('cardHTMLTime', String(Date.now()));
+        } catch (e) {
+            // 存储失败不影响功能
         }
-    }, 50);
+
+        // ===== 委托点击事件（只绑定一次，统一处理所有卡片点击） =====
+        if (!wrap._clickBound) {
+            wrap.addEventListener('click', function(e) {
+                const item = e.target.closest('.site-item');
+                if (item) {
+                    const url = item.dataset.url;
+                    if (url) {
+                        window.open(url, '_blank');
+                    }
+                }
+            });
+            wrap._clickBound = true;
+        }
+
+        setTimeout(() => {
+            if (!isDragLocked) initSortableDrag();
+            isRendering = false;
+            
+            // ===== 启动懒加载图标 =====
+            if (lazyItems.length > 0) {
+                startLazyLoad(lazyItems);
+            }
+        }, 50);
+    });
 }
 
 function renderAll() {
@@ -1384,10 +1390,6 @@ async function testLatency(url) {
         return '超时';
     }
 }
-
-// ============================================================
-//  批量测速 - 逐卡实时更新
-// ============================================================
 
 // ============================================================
 //  批量测速 - 使用 Web Worker（不阻塞主线程）
@@ -2158,6 +2160,7 @@ function loadSingleIcon(div, site) {
         iconEl.style.display = '';
         const img = document.createElement('img');
         img.src = cached;
+        img.loading = 'lazy';
         img.alt = site.name || '图标';
         img.style.width = '100%';
         img.style.height = '100%';
@@ -2178,6 +2181,7 @@ function loadSingleIcon(div, site) {
     
     // 加载图片
     const img = new Image();
+    img.loading = 'lazy';
     // img.crossOrigin = 'anonymous';
     img.onload = function() {
         iconEl.innerHTML = '';
@@ -2188,6 +2192,7 @@ function loadSingleIcon(div, site) {
         iconEl.style.display = '';
         const newImg = document.createElement('img');
         newImg.src = iconUrl;
+        newImg.loading = 'lazy';
         newImg.alt = site.name || '图标';
         newImg.style.width = '100%';
         newImg.style.height = '100%';
