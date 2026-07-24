@@ -136,6 +136,10 @@ function restoreScrollPosition() {
 //  骨架屏
 // ============================================================
 
+// ============================================================
+//  骨架屏
+// ============================================================
+
 function showSkeleton() {
     const wrap = document.getElementById('siteListWrap');
     if (!wrap) return;
@@ -159,6 +163,15 @@ function showSkeleton() {
         `;
     }
     wrap.innerHTML = skeletonHtml;
+}
+
+// 🔥 新增：hideSkeleton 函数
+function hideSkeleton() {
+    isLoading = false;
+    const wrap = document.getElementById('siteListWrap');
+    if (wrap) {
+        wrap.innerHTML = '';
+    }
 }
 
 // ============================================================
