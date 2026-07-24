@@ -5,7 +5,6 @@ body {
     padding: 40px 20px;
     transition: background 0.3s;
     min-height: 100vh;
-    /* 去掉 display: flex; align-items: center; justify-content: center; */
 }
 body.dark { background: #1a1b26; color: #e5e5e5; }
 
@@ -77,17 +76,26 @@ body.dark .main-header {
     gap: 10px;
 }
 
-/* ========== 搜索框 ========== */
-.search-wrap {
+/* ========== 搜索组（搜索框 + 消除按钮 + 排序下拉） ========== */
+.search-group {
     display: flex;
     align-items: center;
     gap: 10px;
     flex: 1;
     min-width: 200px;
 }
+
+/* ========== 搜索框容器 ========== */
+.search-wrap {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    position: relative;
+}
+
 .search-input {
     flex: 1;
-    padding: 0 16px;
+    padding: 0 40px 0 16px;
     height: 38px;
     border: 1px solid #e8f8f0;
     border-radius: 8px;
@@ -96,6 +104,7 @@ body.dark .main-header {
     background: #fff;
     transition: border-color 0.2s, box-shadow 0.2s;
     min-width: 120px;
+    width: 100%;
 }
 body.dark .search-input {
     background: #343541;
@@ -111,29 +120,34 @@ body.dark .search-input:focus {
     border-color: #10b981;
     box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
 }
+
+/* 消除按钮 - 绝对定位在搜索框内部右侧 */
 .clear-search-btn {
-    padding: 0 16px;
-    height: 38px;
-    border: 1px solid #e8f8f0;
-    border-radius: 8px;
-    background: #f9fbfc;
-    color: #6b7280;
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 0 8px;
+    height: 28px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #9ca3af;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
     white-space: nowrap;
-    transition: background 0.2s;
-    display: inline-flex;
+    transition: background 0.2s, color 0.2s;
+    display: none;
     align-items: center;
     justify-content: center;
+    z-index: 2;
 }
-body.dark .clear-search-btn {
-    background: #343541;
-    border-color: #404258;
-    color: #d1d5db;
+.clear-search-btn:not(.hidden) {
+    display: flex;
 }
 .clear-search-btn:hover {
-    background: #e8f8f0;
+    background: #f0f0f0;
     color: #ef4444;
 }
 body.dark .clear-search-btn:hover {
@@ -141,7 +155,7 @@ body.dark .clear-search-btn:hover {
     color: #f87171;
 }
 .clear-search-btn.hidden {
-    display: none;
+    display: none !important;
 }
 
 /* ========== 排序下拉菜单 ========== */
@@ -517,9 +531,9 @@ body.dark .site-item.sortable-drag { box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
     .site-item { padding: 14px 10px; gap: 10px; }
     .site-icon { width: 48px; height: 48px; }
 
-    /* 顶栏布局：搜索框占满，按钮换行 */
+    /* 顶栏布局：搜索组占满 */
     .header-top { flex-direction: column; align-items: stretch; gap: 8px; }
-    .search-wrap { min-width: unset; width: 100%; }
+    .search-group { min-width: unset; width: 100%; }
     .search-input { min-width: unset; }
 
     .user-menu { margin-left: auto; align-self: flex-end; }
