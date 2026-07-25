@@ -1597,8 +1597,6 @@ async function handleFileImport(event) {
             const data = JSON.parse(e.target.result);
             if (!Array.isArray(data)) { showToast('格式错误：需要数组'); return; }
 
-            showToast(`正在导入 ${data.length} 条数据...`);
-
             const importData = data
                 .filter(item => item.name && item.url && isValidUrl(item.url))
                 .map(item => ({
@@ -1614,17 +1612,39 @@ async function handleFileImport(event) {
                 return;
             }
 
-            const result = await API.importLinks(importData);
+            // 🔥 分批导入，每批 20 条，显示进度
+            const BATCH_SIZE = 20;
+            let successCount = 0;
+            let skipCount = 0;
+            let errorCount = 0;
 
-            let msg = `✅ 导入完成：成功 ${result.successCount} 条`;
-            if (result.skipCount > 0) {
-                msg += `，⏭️ 跳过 ${result.skipCount} 条（已存在）`;
+            for (let i = 0; i < importData.length; i += BATCH_SIZE) {
+                const batch = importData.slice(i, i + BATCH_SIZE);
+                // 更新进度
+                showToast(`正在导入 ${Math.min(i + BATCH_SIZE, importData.length)}/${importData.length} 条...`);
+
+                try {
+                    const result = await API.importLinks(batch);
+                    successCount += result.successCount || 0;
+                    skipCount += result.skipCount || 0;
+                    errorCount += result.errorCount || 0;
+                } catch (err) {
+                    errorCount += batch.length;
+                    console.error('批次导入失败:', err);
+                }
             }
-            if (result.errorCount > 0) {
-                msg += `，❌ 失败 ${result.errorCount} 条`;
+
+            // 显示最终结果
+            let msg = `✅ 导入完成：成功 ${successCount} 条`;
+            if (skipCount > 0) {
+                msg += `，⏭️ 跳过 ${skipCount} 条（已存在）`;
+            }
+            if (errorCount > 0) {
+                msg += `，❌ 失败 ${errorCount} 条`;
             }
             showToast(msg);
             await loadLinks();
+
         } catch (err) {
             showToast('❌ 导入失败：' + err.message);
         }
