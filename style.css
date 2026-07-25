@@ -47,7 +47,19 @@ body.dark .container {
 
 /* ========== 登录页 ========== */
 #loginPage { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
-.login-box { background: #faf3eb; padding: 48px 40px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); width: 100%; max-width: 400px; transition: background 0.3s; }
+
+.login-box {
+    background: rgba(247, 240, 232, 0.85);  /* 半透明米黄 */
+    backdrop-filter: blur(10px);            /* 背景模糊，磨砂玻璃效果 */
+    -webkit-backdrop-filter: blur(10px);    /* Safari 兼容 */
+    padding: 48px 40px;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    width: 100%;
+    max-width: 400px;
+    transition: background 0.3s;
+}
+
 body.dark .login-box { background: #242535; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
 .login-box h2 { font-size: 24px; color: #111827; margin-bottom: 8px; text-align: center; }
 body.dark .login-box h2 { color: #f9fafb; }
