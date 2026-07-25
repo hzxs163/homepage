@@ -2197,3 +2197,32 @@ function cleanupLazyLoad() {
     iconLoadQueue = [];
     isLoadingIcons = false;
 }
+
+// ============================================================
+//  强制加载图标（兜底方案）
+// ============================================================
+
+function forceLoadIcons() {
+    const wrap = document.getElementById('siteListWrap');
+    if (!wrap) return;
+    
+    const items = wrap.querySelectorAll('.site-item');
+    const toLoad = [];
+    
+    items.forEach(div => {
+        const iconEl = div.querySelector('.site-icon');
+        // 如果图标是首字母占位（没有 img），加入加载队列
+        if (iconEl && !iconEl.querySelector('img')) {
+            const id = parseInt(div.dataset.id);
+            const site = siteList.find(s => s.id === id);
+            if (site) {
+                toLoad.push({ div, site });
+            }
+        }
+    });
+    
+    if (toLoad.length > 0) {
+        console.log('强制加载图标:', toLoad.length);
+        startLazyLoad(toLoad);
+    }
+}
