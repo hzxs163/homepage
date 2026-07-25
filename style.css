@@ -32,7 +32,7 @@ body.dark { background: #1a1b26; color: #e5e5e5; }
 .container {
     max-width: 1200px;
     margin: 0 auto;
-    background: #fff;
+    background: transparent;
     border-radius: 16px;
     padding: 20px 32px 32px 32px;
     position: relative;
