@@ -2,10 +2,10 @@
 //  Service Worker - PWA 离线缓存
 // ============================================================
 
-const CACHE_NAME = 'my-nav-v2';
-const STATIC_CACHE = 'my-nav-static-v2';
+const CACHE_NAME = 'my-nav-v1';
+const STATIC_CACHE = 'my-nav-static-v1';
 
-// 需要缓存的资源（去掉可能不存在的 manifest.json）
+// 需要缓存的资源
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -14,7 +14,7 @@ const STATIC_ASSETS = [
   '/api.js',
   '/auth.js',
   '/admin.js',
-  '/worker.js',        // 🔥 新增：测速 Worker
+  '/manifest.json',
   'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js'
 ];
 
@@ -27,11 +27,6 @@ self.addEventListener('install', event => {
         return cache.addAll(STATIC_ASSETS);
       })
       .then(() => self.skipWaiting())
-      // 🔥 新增：如果某个资源加载失败，不阻塞安装
-      .catch(err => {
-        console.warn('PWA: 部分资源缓存失败，继续安装', err);
-        return self.skipWaiting();
-      })
   );
 });
 
@@ -56,20 +51,9 @@ self.addEventListener('fetch', event => {
   // 跳过非 GET 请求
   if (event.request.method !== 'GET') return;
 
-  // 🔥 CDN 资源：优先缓存（不需要每次都重新下载）
+  // 跳过 CDN 资源（让浏览器自己处理）
   if (url.hostname.includes('cdn.jsdelivr.net')) {
-    event.respondWith(
-      caches.match(event.request)
-        .then(cached => {
-          if (cached) return cached;
-          return fetch(event.request).then(response => {
-            return caches.open(STATIC_CACHE).then(cache => {
-              cache.put(event.request, response.clone());
-              return response;
-            });
-          });
-        })
-    );
+    event.respondWith(fetch(event.request));
     return;
   }
 
@@ -85,7 +69,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 静态资源：缓存优先，后台更新
+  // 静态资源：缓存优先
   if (url.pathname.match(/\.(css|js|json|png|jpg|jpeg|svg|gif|ico)$/)) {
     event.respondWith(
       caches.match(event.request)
@@ -93,22 +77,17 @@ self.addEventListener('fetch', event => {
           if (cached) {
             // 后台更新
             fetch(event.request).then(response => {
-              if (response && response.status === 200) {
-                caches.open(STATIC_CACHE).then(cache => {
-                  cache.put(event.request, response);
-                });
-              }
+              caches.open(STATIC_CACHE).then(cache => {
+                cache.put(event.request, response);
+              });
             }).catch(() => {});
             return cached;
           }
           return fetch(event.request).then(response => {
-            if (response && response.status === 200) {
-              return caches.open(STATIC_CACHE).then(cache => {
-                cache.put(event.request, response.clone());
-                return response;
-              });
-            }
-            return response;
+            return caches.open(STATIC_CACHE).then(cache => {
+              cache.put(event.request, response.clone());
+              return response;
+            });
           });
         })
         .catch(() => {
@@ -123,12 +102,10 @@ self.addEventListener('fetch', event => {
     fetch(event.request)
       .then(response => {
         // 缓存最新版本
-        if (response && response.status === 200) {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, responseClone);
-          });
-        }
+        const responseClone = response.clone();
+        caches.open(CACHE_NAME).then(cache => {
+          cache.put(event.request, responseClone);
+        });
         return response;
       })
       .catch(() => {
