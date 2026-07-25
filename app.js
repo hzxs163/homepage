@@ -1597,14 +1597,19 @@ async function handleFileImport(event) {
             const data = JSON.parse(e.target.result);
             if (!Array.isArray(data)) { showToast('格式错误：需要数组'); return; }
 
+            // 🔥 修改：根据实际 JSON 格式适配
             const importData = data
-                .filter(item => item.name && item.url && isValidUrl(item.url))
+                .filter(item => {
+                    // 支持 name 或 title 两种字段
+                    const name = item.name || item.title;
+                    return name && item.url && isValidUrl(item.url);
+                })
                 .map(item => ({
-                    title: item.name,
+                    title: item.name || item.title,  // 统一转为 title
                     url: item.url,
                     icon: item.icon || '',
                     tags: item.tags || [],
-                    sort: item.sort || 0
+                    sort: item.sort_order || item.sort || 0  // 支持两种字段名
                 }));
 
             if (importData.length === 0) {
@@ -1620,7 +1625,6 @@ async function handleFileImport(event) {
 
             for (let i = 0; i < importData.length; i += BATCH_SIZE) {
                 const batch = importData.slice(i, i + BATCH_SIZE);
-                // 更新进度
                 showToast(`正在导入 ${Math.min(i + BATCH_SIZE, importData.length)}/${importData.length} 条...`);
 
                 try {
@@ -1634,7 +1638,6 @@ async function handleFileImport(event) {
                 }
             }
 
-            // 显示最终结果
             let msg = `✅ 导入完成：成功 ${successCount} 条`;
             if (skipCount > 0) {
                 msg += `，⏭️ 跳过 ${skipCount} 条（已存在）`;
