@@ -2199,7 +2199,7 @@ function cleanupLazyLoad() {
 }
 
 // ============================================================
-//  强制加载图标（兜底方案）
+//  强制加载图标（兜底方案 - 不依赖 siteList）
 // ============================================================
 
 function forceLoadIcons() {
@@ -2213,10 +2213,17 @@ function forceLoadIcons() {
         const iconEl = div.querySelector('.site-icon');
         // 如果图标是首字母占位（没有 img），加入加载队列
         if (iconEl && !iconEl.querySelector('img')) {
+            const url = div.dataset.url;
             const id = parseInt(div.dataset.id);
+            // 🔥 从 siteList 找数据
             const site = siteList.find(s => s.id === id);
             if (site) {
                 toLoad.push({ div, site });
+            } else {
+                // 🔥 如果 siteList 找不到，从 DOM 直接构造数据
+                const name = div.querySelector('.site-name')?.textContent || '链接';
+                const siteData = { id, url, name };
+                toLoad.push({ div, site: siteData });
             }
         }
     });
