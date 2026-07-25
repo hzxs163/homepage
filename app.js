@@ -2116,7 +2116,8 @@ function loadVisibleIcons() {
         if (div._iconLoaded) continue;
         const rect = div.getBoundingClientRect();
         if (rect.top < window.innerHeight + 100 && rect.bottom > -100) {
-            loadSingleIcon(div, site);
+            // 🔥 改用 Direct 版本
+            loadSingleIconDirect(div, site);
             loaded++;
         }
     }
@@ -2199,7 +2200,7 @@ function cleanupLazyLoad() {
 }
 
 // ============================================================
-//  强制加载图标（兜底方案 - 不依赖 siteList）
+//  强制加载图标（直接加载，不依赖 Observer）
 // ============================================================
 
 function forceLoadIcons() {
@@ -2207,29 +2208,81 @@ function forceLoadIcons() {
     if (!wrap) return;
     
     const items = wrap.querySelectorAll('.site-item');
-    const toLoad = [];
+    let loadedCount = 0;
     
     items.forEach(div => {
         const iconEl = div.querySelector('.site-icon');
-        // 如果图标是首字母占位（没有 img），加入加载队列
+        // 如果图标是首字母占位（没有 img），直接加载
         if (iconEl && !iconEl.querySelector('img')) {
             const url = div.dataset.url;
             const id = parseInt(div.dataset.id);
-            // 🔥 从 siteList 找数据
             const site = siteList.find(s => s.id === id);
             if (site) {
-                toLoad.push({ div, site });
-            } else {
-                // 🔥 如果 siteList 找不到，从 DOM 直接构造数据
-                const name = div.querySelector('.site-name')?.textContent || '链接';
-                const siteData = { id, url, name };
-                toLoad.push({ div, site: siteData });
+                // 🔥 直接调用加载函数，不经过 Observer
+                loadSingleIconDirect(div, site);
+                loadedCount++;
             }
         }
     });
     
-    if (toLoad.length > 0) {
-        console.log('强制加载图标:', toLoad.length);
-        startLazyLoad(toLoad);
+    if (loadedCount > 0) {
+        console.log('✅ 直接加载图标:', loadedCount);
     }
+}
+
+// ============================================================
+//  直接加载单个图标（不依赖 IntersectionObserver）
+// ============================================================
+
+function loadSingleIconDirect(div, site) {
+    if (div._iconLoaded) return;
+    div._iconLoaded = true;
+    
+    const iconEl = div.querySelector('.site-icon');
+    if (!iconEl) return;
+    if (iconEl.querySelector('img')) return;
+    
+    const cacheKey = 'icon_' + site.id;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+        iconEl.innerHTML = '';
+        iconEl.style.background = 'transparent';
+        const img = document.createElement('img');
+        img.src = cached;
+        img.loading = 'lazy';
+        img.alt = site.name || '图标';
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'cover';
+        iconEl.appendChild(img);
+        return;
+    }
+    
+    let iconUrl;
+    try {
+        const u = new URL(site.url || '');
+        iconUrl = `${u.protocol}//${u.hostname}/favicon.ico`;
+    } catch {
+        return;
+    }
+    
+    const img = new Image();
+    img.loading = 'lazy';
+    img.onload = function() {
+        iconEl.innerHTML = '';
+        iconEl.style.background = 'transparent';
+        const newImg = document.createElement('img');
+        newImg.src = iconUrl;
+        newImg.loading = 'lazy';
+        newImg.alt = site.name || '图标';
+        newImg.style.width = '100%';
+        newImg.style.height = '100%';
+        newImg.style.objectFit = 'cover';
+        iconEl.appendChild(newImg);
+        localStorage.setItem(cacheKey, iconUrl);
+    };
+    img.onerror = function() {
+        div._iconLoaded = false;
+    };
+    img.src = iconUrl;
 }
