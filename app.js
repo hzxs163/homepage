@@ -2235,6 +2235,7 @@ function forceLoadIcons() {
 // ============================================================
 
 function loadSingleIconDirect(div, site) {
+    console.log('🔥 loadSingleIconDirect 被调用:', site.name);  // <-- 添加这行
     if (div._iconLoaded) return;
     div._iconLoaded = true;
     
