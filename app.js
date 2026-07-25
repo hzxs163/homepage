@@ -531,9 +531,12 @@ function getFilteredList() {
     const searchInput = document.getElementById('searchInput');
     const keyword = searchInput ? searchInput.value.trim().toLowerCase() : '';
     let list = [...siteList];
-    if (activeTag !== 'all') {
+    
+    // 🔥 标签只用于浏览，搜索时忽略
+    if (!keyword && activeTag !== 'all') {
         list = list.filter(s => s.tags && Array.isArray(s.tags) && s.tags.includes(activeTag));
     }
+    
     if (keyword) {
         list = list.filter(s =>
             (s.name || '').toLowerCase().includes(keyword) ||
@@ -541,7 +544,6 @@ function getFilteredList() {
             (s.tags && Array.isArray(s.tags) && s.tags.some(t => (t || '').toLowerCase().includes(keyword)))
         );
     }
-    // 后端已排序，前端只做筛选，不重新排序
     return list;
 }
 
