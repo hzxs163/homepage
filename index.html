@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>我的导航</title>
+<!-- ========== 📚 Favicon ========== -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container" id="app">
+
+<!-- ==================== 登录页 ==================== -->
+<div id="loginPage">
+    <div class="login-box">
+        <h2>📚 我的导航</h2>
+        <div class="form-item">
+            <label>用户名</label>
+            <input type="text" id="loginUsername" placeholder="" autocomplete="username">
+        </div>
+        <div class="form-item">
+            <label>密码</label>
+            <input type="password" id="loginPassword" placeholder="" autocomplete="current-password">
+        </div>
+        <button class="login-btn" id="loginBtn">登 录</button>
+        <div class="login-error" id="loginError"></div>
+    </div>
+</div>
+
+<!-- ==================== 主页面 ==================== -->
+<div id="mainPage" style="display:none;">
+
+    <!-- ========== 顶栏 ========== -->
+    <div class="main-header">
+        <!-- 第一行：搜索组 + 用户菜单 -->
+        <div class="header-top">
+            <!-- 搜索组：搜索框 + 消除按钮 + 排序下拉 -->
+            <div class="search-group">
+                <div class="search-wrap">
+                    <input type="text" class="search-input" id="searchInput" placeholder="输入关词...">
+                    <button class="clear-search-btn hidden" id="clearSearchBtn">✕</button>
+                </div>
+                <select class="sort-select" id="sortSelect">
+                    <option value="sort_order:ASC">默认排序</option>
+                    <option value="click_count:DESC">点击量 ↓</option>
+                    <option value="click_count:ASC">点击量 ↑</option>
+                    <option value="created_at:DESC">最新添加</option>
+                    <option value="created_at:ASC">最早添加</option>
+                    <option value="title:ASC">名称 A→Z</option>
+                    <option value="title:DESC">名称 Z→A</option>
+                </select>
+            </div>
+
+            <!-- 功能按钮（全局隐藏，只在下拉菜单中显示） -->
+            <div class="btn-group">
+                <button class="add-btn" id="addBtn">添加网址</button>
+                <button class="refresh-btn" id="refreshBtn">测速</button>
+                <button class="import-json-btn" id="importBtn">导入</button>
+                <button class="export-json-btn" id="exportBtn">导出</button>
+                <button class="drag-lock-btn" id="dragLockBtn">🔒</button>
+                <button class="theme-toggle-btn" id="themeToggleBtn">🌞</button>
+                <input type="file" id="fileInput" accept=".json">
+            </div>
+
+            <!-- 用户菜单 -->
+            <div class="user-menu">
+                <div class="user-dropdown" id="userDropdown">
+                    <button class="user-btn" id="userMenuBtn">
+                        <span class="user-avatar">👤</span>
+                        <span class="user-name" id="displayUsername">用户</span>
+                        <span class="user-arrow">▼</span>
+                    </button>
+                    <div class="dropdown-menu" id="dropdownMenu">
+                        <div class="dropdown-item user-info-item">
+                            <span class="user-avatar-small">👤</span>
+                            <div>
+                                <div class="dropdown-username" id="dropdownUsername">用户</div>
+                                <div class="dropdown-role" id="dropdownRole">普通</div>
+                            </div>
+                        </div>
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-item menu-add" id="menuAdd">➕ 添加网址</div>
+                        <div class="dropdown-item menu-speed" id="menuSpeed">📊 测速</div>
+                        <div class="dropdown-item menu-import" id="menuImport">📥 导入</div>
+                        <div class="dropdown-item menu-export" id="menuExport">📤 导出</div>
+                        <div class="dropdown-item menu-lock" id="menuLock">🔒 拖拽锁定</div>
+                        <div class="dropdown-item menu-theme" id="menuTheme">🌞 切换主题</div>
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-item menu-admin" id="adminMenuItem" style="display:none;">👥 管理</div>
+                        <div class="dropdown-item logout-item" id="logoutMenuItem">🚪 退出</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 标签筛选 ========== -->
+    <div class="tags-filter-wrap" id="tagsFilterWrap">
+        <div class="tags-filter-title">标签筛选：</div>
+        <div class="tags-list" id="tagsList"></div>
+    </div>
+
+    <!-- ========== 链接列表 ========== -->
+    <div id="siteListWrap" class="site-list-grid"></div>
+</div>
+
+<!-- ==================== 添加/编辑弹窗 ==================== -->
+<div class="modal-mask" id="addModal">
+    <div class="modal-container">
+        <div class="modal-header">
+            <h3 class="modal-title" id="modalTitle">添加新网址</h3>
+            <button class="modal-close" id="modalCloseBtn">×</button>
+        </div>
+        <div class="modal-form">
+            <div class="form-item">
+                <label>网站名称</label>
+                <input type="text" id="modalSiteName" placeholder="例如：福利吧论坛">
+            </div>
+            <div class="form-item">
+                <label>网站地址</label>
+                <input type="text" id="modalSiteUrl" placeholder="例如：https://www.example.com">
+                <button class="paste-btn" id="pasteBtn">📋 从剪贴板识别填充</button>
+            </div>
+            <div class="form-item">
+                <label>图标符号（可选）</label>
+                <input type="text" id="modalSiteIcon" placeholder="例如：⭐、🌐、🔑" maxlength="2">
+            </div>
+            <div class="form-item">
+                <label>网站标签</label>
+                <input type="text" id="modalSiteTags" placeholder="例如：福利,论坛,资源">
+                <div class="tags-select-wrap">
+                    <div class="existing-tags-list" id="existingTagsList"></div>
+                    <div class="selected-tags-list" id="selectedTagsList"></div>
+                    <div class="tags-tips">💡 点击已有标签快速选择，或手动输入新标签</div>
+                </div>
+            </div>
+            <div class="form-item">
+                <label>排序权重</label>
+                <input type="number" id="modalSiteSort" placeholder="数字越小越靠前" min="1" step="1">
+                <div class="tags-tips">💡 建议使用10的倍数（10、20、30...）</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-cancel" id="modalCancelBtn">取消</button>
+            <button class="modal-confirm" id="modalConfirmBtn">确认添加</button>
+            <button class="modal-delete" id="modalDeleteBtn" style="display:none;">删除网址</button>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 管理员弹窗 ==================== -->
+<div class="modal-mask" id="adminModal">
+    <div class="modal-container" style="max-width:600px;">
+        <div class="modal-header">
+            <h3 class="modal-title">👥 用户管理</h3>
+            <button class="modal-close" id="adminModalCloseBtn">×</button>
+        </div>
+        <div class="modal-form">
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;">
+                <input type="text" id="adminNewUser" placeholder="新用户名" style="flex:1; padding:10px 14px; border:1px solid #e8f8f0; border-radius:8px; font-size:14px; background:#fff;">
+                <input type="text" id="adminNewPass" placeholder="初始密码" style="flex:1; padding:10px 14px; border:1px solid #e8f8f0; border-radius:8px; font-size:14px; background:#fff;">
+                <button class="modal-confirm" id="adminCreateBtn" style="padding:10px 24px;">创建用户</button>
+            </div>
+            <div id="adminUserList" style="max-height:300px; overflow-y:auto;"></div>
+            <div class="tags-tips" id="adminMsg"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-cancel" id="adminModalCloseBtn2">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 返回顶部 ==================== -->
+<button class="back-to-top" id="backToTopBtn">↑</button>
+
+<!-- ==================== Toast提示 ==================== -->
+<div class="toast" id="toast"></div>
+
+<script src="api.js"></script>
+<script src="auth.js"></script>
+<script src="app.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>
