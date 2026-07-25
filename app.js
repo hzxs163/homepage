@@ -140,11 +140,6 @@ function showSkeleton() {
     const wrap = document.getElementById('siteListWrap');
     if (!wrap) return;
     
-    // 🔥 如果有卡片 HTML 缓存，不显示骨架屏
-    if (localStorage.getItem('cardHTML')) {
-        return;
-    }
-    
     // 🔥 如果有数据缓存，不显示骨架屏
     if (localStorage.getItem('siteList')) {
         return;
@@ -198,34 +193,15 @@ function toggleTheme() {
 }
 
 // ============================================================
-//  优化版数据加载 - 秒开策略 + 卡片HTML缓存 + 标签缓存
+//  优化版数据加载 - 秒开策略（方案一：数据渲染）
 // ============================================================
 
 async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
     const statusEl = document.getElementById('syncStatus');
     let hasCache = false;
-    const wrap = document.getElementById('siteListWrap');
     const tagsList = document.getElementById('tagsList');
     
-    // ===== 第一步：秒开 - 恢复卡片 HTML 缓存 =====
-    const cardHTML = localStorage.getItem('cardHTML');
-    if (cardHTML && wrap) {
-        // 🔥 直接把卡片 HTML 插入，用户瞬间看到内容
-        wrap.innerHTML = cardHTML;
-        if (statusEl) statusEl.textContent = '● 缓存模式 ⚡';
-        // 恢复滚动位置
-        restoreScrollPosition();
-    }
-    
-    // ===== 🔥 秒开 - 恢复标签 HTML 缓存 =====
-    const tagsHTML = localStorage.getItem('tagsHTML');
-    if (tagsHTML && tagsList) {
-        tagsList.innerHTML = tagsHTML;
-        // 重新绑定标签点击事件
-        rebindTagEvents();
-    }
-    
-    // ===== 第二步：读取数据缓存 =====
+    // ===== 第一步：读取数据缓存 =====
     const cached = localStorage.getItem('siteList');
     if (cached) {
         try {
@@ -233,26 +209,33 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
             if (Array.isArray(parsed) && parsed.length > 0) {
                 siteList = parsed;
                 hasCache = true;
-                // 如果没有卡片 HTML 缓存，才需要渲染
-                if (!cardHTML) {
-                    hideSkeleton();
-                    renderAll();
-                    restoreScrollPosition();
-                }
-                if (statusEl && !cardHTML) statusEl.textContent = '● 缓存模式 ⚡';
+                
+                // ✅ 直接渲染，图标懒加载会正常工作
+                hideSkeleton();
+                renderAll();
+                restoreScrollPosition();
+                
+                if (statusEl) statusEl.textContent = '● 缓存模式 ⚡';
             }
         } catch { }
     }
     
+    // 🔥 恢复标签 HTML 缓存（秒开）
+    const tagsHTML = localStorage.getItem('tagsHTML');
+    if (tagsHTML && tagsList && !hasCache) {
+        tagsList.innerHTML = tagsHTML;
+        rebindTagEvents();
+    }
+    
     // 没有缓存才显示骨架屏
-    if (!hasCache && !cardHTML) {
+    if (!hasCache) {
         showSkeleton();
         if (statusEl) statusEl.textContent = '● 加载中...';
     } else {
-        if (statusEl && !cardHTML) statusEl.textContent = '● 更新中...';
+        if (statusEl) statusEl.textContent = '● 更新中...';
     }
     
-    // ===== 第三步：后台静默请求最新数据 =====
+    // ===== 第二步：后台静默请求最新数据 =====
     try {
         const data = await API.getLinks(sortBy, order);
         
@@ -279,7 +262,7 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
         
         localStorage.setItem('siteList', JSON.stringify(siteList));
         
-        // 数据更新后重新渲染（会覆盖缓存的 HTML）
+        // 数据更新后重新渲染
         hideSkeleton();
         renderAll();
         restoreScrollPosition();
@@ -288,13 +271,13 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
         
     } catch (err) {
         console.error('后台更新失败:', err);
-        if (!hasCache && !cardHTML) {
+        if (!hasCache) {
             siteList = [];
             hideSkeleton();
             renderAll();
             showToast('加载数据失败，请刷新重试');
         }
-        if (statusEl) statusEl.textContent = hasCache || cardHTML ? '● 缓存模式' : '● 无数据';
+        if (statusEl) statusEl.textContent = hasCache ? '● 缓存模式' : '● 无数据';
     }
 }
 
@@ -707,15 +690,6 @@ function renderList() {
         });
 
         wrap.appendChild(frag);
-
-        // ===== 🔥 保存卡片 HTML 到 localStorage（预渲染缓存） =====
-        try {
-            const cardHTML = wrap.innerHTML;
-            localStorage.setItem('cardHTML', cardHTML);
-            localStorage.setItem('cardHTMLTime', String(Date.now()));
-        } catch (e) {
-            // 存储失败不影响功能
-        }
 
         // ===== 委托点击事件（只绑定一次，统一处理所有卡片点击） =====
         if (!wrap._clickBound) {
