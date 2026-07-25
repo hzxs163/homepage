@@ -2229,13 +2229,8 @@ function forceLoadIcons() {
         console.log('✅ 直接加载图标:', loadedCount);
     }
 }
-
-// ============================================================
-//  直接加载单个图标（不依赖 IntersectionObserver）
-// ============================================================
-
 function loadSingleIconDirect(div, site) {
-    console.log('🔥 loadSingleIconDirect 被调用:', site.name);  // <-- 添加这行
+    console.log('🔥 loadSingleIconDirect 被调用:', site.name);
     if (div._iconLoaded) return;
     div._iconLoaded = true;
     
@@ -2243,9 +2238,15 @@ function loadSingleIconDirect(div, site) {
     if (!iconEl) return;
     if (iconEl.querySelector('img')) return;
     
+    if (site.icon && site.icon.length <= 2 && !site.icon.startsWith('http')) {
+        return;
+    }
+    
     const cacheKey = 'icon_' + site.id;
     const cached = localStorage.getItem(cacheKey);
+    
     if (cached) {
+        console.log('📦 使用缓存:', site.name, cached);
         iconEl.innerHTML = '';
         iconEl.style.background = 'transparent';
         const img = document.createElement('img');
@@ -2255,7 +2256,20 @@ function loadSingleIconDirect(div, site) {
         img.style.width = '100%';
         img.style.height = '100%';
         img.style.objectFit = 'cover';
+        img.onerror = function() {
+            console.log('❌ 缓存图片加载失败:', site.name);
+            iconEl.innerHTML = (site.name || '链接').charAt(0).toUpperCase();
+            iconEl.style.background = '#00b866';
+            iconEl.style.fontSize = '24px';
+            iconEl.style.fontWeight = 'bold';
+            iconEl.style.color = '#fff';
+            iconEl.style.display = 'flex';
+            iconEl.style.alignItems = 'center';
+            iconEl.style.justifyContent = 'center';
+            localStorage.removeItem(cacheKey);
+        };
         iconEl.appendChild(img);
+        console.log('✅ 缓存图片已插入 DOM:', site.name);
         return;
     }
     
@@ -2264,12 +2278,18 @@ function loadSingleIconDirect(div, site) {
         const u = new URL(site.url || '');
         iconUrl = `${u.protocol}//${u.hostname}/favicon.ico`;
     } catch {
+        console.log('❌ URL 解析失败:', site.name);
         return;
     }
     
+    console.log('🔄 开始加载图标:', site.name, iconUrl);
+    
     const img = new Image();
     img.loading = 'lazy';
+    img.crossOrigin = 'anonymous';
+    
     img.onload = function() {
+        console.log('✅ 图片加载成功 (onload):', site.name);
         iconEl.innerHTML = '';
         iconEl.style.background = 'transparent';
         const newImg = document.createElement('img');
@@ -2279,11 +2299,26 @@ function loadSingleIconDirect(div, site) {
         newImg.style.width = '100%';
         newImg.style.height = '100%';
         newImg.style.objectFit = 'cover';
+        newImg.onerror = function() {
+            console.log('❌ 新图片加载失败:', site.name);
+            iconEl.innerHTML = (site.name || '链接').charAt(0).toUpperCase();
+            iconEl.style.background = '#00b866';
+            iconEl.style.fontSize = '24px';
+            iconEl.style.fontWeight = 'bold';
+            iconEl.style.color = '#fff';
+            iconEl.style.display = 'flex';
+            iconEl.style.alignItems = 'center';
+            iconEl.style.justifyContent = 'center';
+        };
         iconEl.appendChild(newImg);
         localStorage.setItem(cacheKey, iconUrl);
     };
+    
     img.onerror = function() {
-        div._iconLoaded = false;
+        console.log('❌ 图片加载失败 (onerror):', site.name, iconUrl);
+        // 备用方案...
     };
+    
     img.src = iconUrl;
 }
+
