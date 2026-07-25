@@ -1597,27 +1597,39 @@ async function handleFileImport(event) {
             const data = JSON.parse(e.target.result);
             if (!Array.isArray(data)) { showToast('格式错误：需要数组'); return; }
 
-            // 🔥 修改：根据实际 JSON 格式适配
-            const importData = data
+            // 🔥 获取当前已有的 URL 列表（用于去重）
+            const existingUrls = new Set(siteList.map(s => s.url));
+
+            const allImportData = data
                 .filter(item => {
-                    // 支持 name 或 title 两种字段
                     const name = item.name || item.title;
                     return name && item.url && isValidUrl(item.url);
                 })
                 .map(item => ({
-                    title: item.name || item.title,  // 统一转为 title
+                    title: item.name || item.title,
                     url: item.url,
                     icon: item.icon || '',
                     tags: item.tags || [],
-                    sort: item.sort_order || item.sort || 0  // 支持两种字段名
+                    sort: item.sort_order || item.sort || 0
                 }));
 
+            // 🔥 过滤掉已存在的 URL
+            const importData = allImportData.filter(item => !existingUrls.has(item.url));
+            const skippedCount = allImportData.length - importData.length;
+
             if (importData.length === 0) {
-                showToast('没有有效数据可导入');
+                if (skippedCount > 0) {
+                    showToast(`所有 ${skippedCount} 条数据都已存在，无需导入`);
+                } else {
+                    showToast('没有有效数据可导入');
+                }
+                await loadLinks();
                 return;
             }
 
-            // 🔥 分批导入，每批 20 条，显示进度
+            // 🔥 显示导入预览
+            showToast(`共 ${allImportData.length} 条，其中 ${skippedCount} 条已存在，将导入 ${importData.length} 条新数据`);
+
             const BATCH_SIZE = 20;
             let successCount = 0;
             let skipCount = 0;
@@ -1640,11 +1652,12 @@ async function handleFileImport(event) {
 
             let msg = `✅ 导入完成：成功 ${successCount} 条`;
             if (skipCount > 0) {
-                msg += `，⏭️ 跳过 ${skipCount} 条（已存在）`;
+                msg += `，⏭️ 跳过 ${skipCount} 条（后端去重）`;
             }
             if (errorCount > 0) {
                 msg += `，❌ 失败 ${errorCount} 条`;
             }
+            msg += `（本次实际新增 ${importData.length} 条）`;
             showToast(msg);
             await loadLinks();
 
