@@ -545,6 +545,10 @@ function getFilteredList() {
     return list;
 }
 
+// ============================================================
+//  🔥 增量更新渲染 - 减少 DOM 重建
+// ============================================================
+
 function renderList() {
     if (isRendering) return;
 
@@ -564,7 +568,7 @@ function renderList() {
         isRendering = false;
         return;
     }
-    wrap.innerHTML = '';
+
     const filtered = getFilteredList();
 
     if (!Array.isArray(filtered) || filtered.length === 0) {
@@ -573,6 +577,38 @@ function renderList() {
         return;
     }
 
+    // ===== 🔥 增量更新：检查是否可以复用现有 DOM =====
+    const existingItems = wrap.querySelectorAll('.site-item');
+    const existingCount = existingItems.length;
+    const newCount = filtered.length;
+
+    // 如果数量相同，尝试复用 DOM
+    if (existingCount === newCount) {
+        let needRebuild = false;
+        // 检查数据是否有变化（通过 id 对比）
+        existingItems.forEach((el, index) => {
+            const id = parseInt(el.dataset.id);
+            if (id !== filtered[index].id) {
+                needRebuild = true;
+            }
+        });
+        
+        if (!needRebuild) {
+            // 🔥 数据没变，只更新内容（测速、标签等）
+            existingItems.forEach((el, index) => {
+                updateItemContent(el, filtered[index]);
+            });
+            // 仍然需要确保拖拽状态正确
+            if (!isDragLocked) {
+                setTimeout(() => initSortableDrag(), 50);
+            }
+            isRendering = false;
+            return;
+        }
+    }
+
+    // ===== 数量不同或数据变化 → 完全重建 =====
+    wrap.innerHTML = '';
     const frag = document.createDocumentFragment();
     const lazyItems = [];
 
@@ -735,6 +771,59 @@ function renderList() {
             startLazyLoad(lazyItems);
         }
     }, 50);
+}
+
+// ============================================================
+//  🔥 更新单个卡片内容（增量更新用）
+// ============================================================
+
+function updateItemContent(el, site) {
+    // 更新测速标签
+    const latencyTag = el.querySelector('.latency-tag');
+    if (latencyTag) {
+        const url = site.url || '';
+        const result = latencyCache[url];
+        if (result !== undefined) {
+            if (result === '超时' || result === '失效') {
+                latencyTag.textContent = result;
+                latencyTag.className = 'latency-tag latency-timeout';
+            } else if (typeof result === 'number' && result > 0) {
+                latencyTag.textContent = result + ' ms';
+                latencyTag.className = 'latency-tag latency-success';
+            } else {
+                latencyTag.textContent = String(result);
+                latencyTag.className = 'latency-tag latency-timeout';
+            }
+        } else {
+            latencyTag.textContent = '未测速';
+            latencyTag.className = 'latency-tag';
+        }
+    }
+
+    // 更新标签
+    const tagsContainer = el.querySelector('.site-tags');
+    if (tagsContainer) {
+        if (site.tags && Array.isArray(site.tags) && site.tags.length) {
+            const displayTags = site.tags.slice(0, 3);
+            const extraCount = site.tags.length - 3;
+            tagsContainer.innerHTML = displayTags.map(t => `<span class="site-tag">${t || ''}</span>`).join('') +
+                (extraCount > 0 ? `<span class="site-tag" style="background:#e5e7eb;color:#6b7280;">+${extraCount}</span>` : '');
+        } else {
+            tagsContainer.innerHTML = '';
+        }
+    }
+
+    // 更新名称
+    const nameEl = el.querySelector('.site-name');
+    if (nameEl) nameEl.textContent = site.name || '未命名';
+
+    // 更新 URL
+    const urlEl = el.querySelector('.site-url');
+    if (urlEl) urlEl.textContent = site.url || '';
+
+    // 更新 data 属性
+    el.dataset.url = site.url || '';
+    el.dataset.id = site.id || '';
 }
 
 function renderAll() {
@@ -1384,10 +1473,6 @@ async function testLatency(url) {
         return '超时';
     }
 }
-
-// ============================================================
-//  批量测速 - 逐卡实时更新
-// ============================================================
 
 // ============================================================
 //  批量测速 - 使用 Web Worker（不阻塞主线程）
@@ -2108,8 +2193,7 @@ function startLazyLoad(items) {
         });
         
         if (toLoad.length > 0) {
-            // 每次最多加载 BATCH_SIZE 个
-            const batch = toLoad.slice(0, BATCH_SIZE);
+            // 每次最多加载 BATCH_SIZE 个            const batch = toLoad.slice(0, BATCH_SIZE);
             batch.forEach(({ div, site }) => {
                 loadSingleIcon(div, site);
             });
