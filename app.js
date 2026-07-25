@@ -1150,6 +1150,7 @@ function closeModal() {
     editingId = null;
 }
 
+
 // ============================================================
 //  标签相关（含展开/收起）
 // ============================================================
@@ -1963,18 +1964,28 @@ document.addEventListener('DOMContentLoaded', function() {
     const backToTopBtn = document.getElementById('backToTopBtn');
     if (backToTopBtn) backToTopBtn.addEventListener('click', backToTop);
 
-    const addModal = document.getElementById('addModal');
-    const adminModal = document.getElementById('adminModal');
-    if (addModal) {
-        addModal.addEventListener('click', (e) => {
-            if (e.target === addModal) closeModal();
-        });
-    }
-    if (adminModal) {
-        adminModal.addEventListener('click', (e) => {
-            if (e.target === adminModal) closeAdminPanel();
-        });
-    }
+const addModal = document.getElementById('addModal');
+const adminModal = document.getElementById('adminModal');
+if (addModal) {
+    addModal.addEventListener('click', (e) => {
+        if (e.target === addModal) closeModal();
+    });
+    // 🔥 新增：弹窗内按 Enter 提交
+    addModal.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && addModal.classList.contains('show')) {
+            const confirmBtn = document.getElementById('modalConfirmBtn');
+            if (confirmBtn) {
+                e.preventDefault();
+                confirmBtn.click();
+            }
+        }
+    });
+}
+if (adminModal) {
+    adminModal.addEventListener('click', (e) => {
+        if (e.target === adminModal) closeAdminPanel();
+    });
+}
 
     if (isLoggedIn()) {
         const user = JSON.parse(localStorage.getItem('user') || '{}');
