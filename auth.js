@@ -71,7 +71,10 @@ function doLogout() {
     authUser = null;
     const loginPage = document.getElementById('loginPage');
     const mainPage = document.getElementById('mainPage');
-    if (loginPage) loginPage.style.display = 'flex';
+    if (loginPage) {
+        loginPage.style.display = 'flex';
+        loginPage.classList.add('show');  // 🔥 加上 .show 类
+    }
     if (mainPage) mainPage.style.display = 'none';
     showToast('已退出');
 }
@@ -80,7 +83,10 @@ function doLogout() {
 function enterMainPage() {
     const loginPage = document.getElementById('loginPage');
     const mainPage = document.getElementById('mainPage');
-    if (loginPage) loginPage.style.display = 'none';
+    if (loginPage) {
+        loginPage.style.display = 'none';
+        loginPage.classList.remove('show');  // 🔥 移除 .show 类
+    }
     if (mainPage) mainPage.style.display = 'block';
     
     const user = JSON.parse(localStorage.getItem('user') || '{}');
