@@ -210,10 +210,14 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
                 siteList = parsed;
                 hasCache = true;
                 
-                // ✅ 直接渲染，图标懒加载会正常工作
                 hideSkeleton();
                 renderAll();
                 restoreScrollPosition();
+                
+                // 🔥 延迟触发图标加载（等待 DOM 渲染完成）
+                setTimeout(() => {
+                    forceLoadIcons();
+                }, 300);
                 
                 if (statusEl) statusEl.textContent = '● 缓存模式 ⚡';
             }
@@ -262,10 +266,14 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
         
         localStorage.setItem('siteList', JSON.stringify(siteList));
         
-        // 数据更新后重新渲染
         hideSkeleton();
         renderAll();
         restoreScrollPosition();
+        
+        // 🔥 数据更新后也强制加载图标
+        setTimeout(() => {
+            forceLoadIcons();
+        }, 300);
         
         if (statusEl) statusEl.textContent = '● 云端模式 ✅';
         
