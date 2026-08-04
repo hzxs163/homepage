@@ -213,12 +213,35 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
         // 🔥 直接把卡片 HTML 插入，用户瞬间看到内容
         wrap.innerHTML = cardHTML;
         
-        // 🔥 重置事件绑定标记，让 renderList 重新绑定
+        // 🔥 重置事件绑定标记，重新绑定事件（不重建 DOM）
         wrap._clickBound = false;
-        wrap._contextMenuBound = false;
+        if (!wrap._clickBound) {
+            wrap.addEventListener('click', function(e) {
+                const item = e.target.closest('.site-item');
+                if (item) {
+                    const url = item.dataset.url;
+                    if (url) {
+                        window.open(url, '_blank');
+                    }
+                }
+            });
+            wrap._clickBound = true;
+        }
         
-        // 🔥 调用 renderList 重新绑定事件（但不会重建 DOM，因为已经插入了）
-        renderList();
+        // 🔥 重新绑定右键菜单（委托方式，只绑一次）
+        if (!wrap._contextMenuBound) {
+            wrap.addEventListener('contextmenu', function(e) {
+                const div = e.target.closest('.site-item');
+                if (div) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const id = parseInt(div.dataset.id);
+                    const url = div.dataset.url;
+                    showContextMenu(e.clientX, e.clientY, id, url);
+                }
+            });
+            wrap._contextMenuBound = true;
+        }
         
         // 恢复滚动位置
         restoreScrollPosition();
