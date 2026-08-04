@@ -213,41 +213,16 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
         // 🔥 直接把卡片 HTML 插入，用户瞬间看到内容
         wrap.innerHTML = cardHTML;
         
-        // 🔥 重置点击事件绑定标记，让事件重新绑定
+        // 🔥 重置事件绑定标记，让 renderList 重新绑定
         wrap._clickBound = false;
-        // 🔥 立即重新绑定点击事件
-        if (!wrap._clickBound) {
-            wrap.addEventListener('click', function(e) {
-                const item = e.target.closest('.site-item');
-                if (item) {
-                    const url = item.dataset.url;
-                    if (url) {
-                        window.open(url, '_blank');
-                    }
-                }
-            });
-            wrap._clickBound = true;
-        }
+        wrap._contextMenuBound = false;
         
-        // 🔥 重新绑定右键菜单事件（卡片上的 contextmenu）
-        wrap.querySelectorAll('.site-item').forEach(div => {
-            const id = parseInt(div.dataset.id);
-            const url = div.dataset.url;
-            // 移除旧的事件（避免重复绑定）
-            div.removeEventListener('contextmenu', div._contextMenuHandler);
-            // 绑定新事件
-            const handler = function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                showContextMenu(e.clientX, e.clientY, id, url);
-            };
-            div._contextMenuHandler = handler;
-            div.addEventListener('contextmenu', handler);
-        });
+        // 🔥 调用 renderList 重新绑定事件（但不会重建 DOM，因为已经插入了）
+        renderList();
         
-        if (statusEl) statusEl.textContent = '● 缓存模式 ⚡';
         // 恢复滚动位置
         restoreScrollPosition();
+        if (statusEl) statusEl.textContent = '● 缓存模式 ⚡';
     }
     
     // ===== 🔥 秒开 - 恢复标签 HTML 缓存 =====
@@ -330,6 +305,7 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
         if (statusEl) statusEl.textContent = hasCache || cardHTML ? '● 缓存模式' : '● 无数据';
     }
 }
+
 
 // ============================================================
 //  重新绑定标签事件
