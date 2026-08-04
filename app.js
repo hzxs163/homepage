@@ -54,14 +54,12 @@ function getSiteLogoSync(site) {
         return 'https://ui-avatars.com/api/?name=🔗&background=00b866&color=fff&size=48';
     }
     
-    // 检查 localStorage 缓存
     const cacheKey = 'icon_' + site.id;
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
         return cached;
     }
     
-    // 返回空，表示需要懒加载
     return null;
 }
 
@@ -97,7 +95,6 @@ function saveTagSortOrder() {
 function loadActiveTag() {
     const saved = localStorage.getItem('activeTag');
     if (saved && saved !== 'all') {
-        // 验证该标签是否还存在
         const tags = getAllTags();
         if (tags.includes(saved)) {
             activeTag = saved;
@@ -140,12 +137,10 @@ function showSkeleton() {
     const wrap = document.getElementById('siteListWrap');
     if (!wrap) return;
     
-    // 🔥 如果有卡片 HTML 缓存，不显示骨架屏
     if (localStorage.getItem('cardHTML')) {
         return;
     }
     
-    // 🔥 如果有数据缓存，不显示骨架屏
     if (localStorage.getItem('siteList')) {
         return;
     }
@@ -170,7 +165,6 @@ function hideSkeleton() {
     isLoading = false;
     const wrap = document.getElementById('siteListWrap');
     if (wrap) {
-        // 🔥 只有当内容是骨架时才清空
         if (wrap.querySelector('.skeleton-item')) {
             wrap.innerHTML = '';
         }
@@ -213,35 +207,10 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
         // 🔥 直接把卡片 HTML 插入，用户瞬间看到内容
         wrap.innerHTML = cardHTML;
         
-        // 🔥 重置事件绑定标记，重新绑定事件（不重建 DOM）
+        // 🔥 只重置事件标记，不绑定事件（让 renderList 统一管理）
         wrap._clickBound = false;
-        if (!wrap._clickBound) {
-            wrap.addEventListener('click', function(e) {
-                const item = e.target.closest('.site-item');
-                if (item) {
-                    const url = item.dataset.url;
-                    if (url) {
-                        window.open(url, '_blank');
-                    }
-                }
-            });
-            wrap._clickBound = true;
-        }
-        
-        // 🔥 重新绑定右键菜单（委托方式，只绑一次）
-        if (!wrap._contextMenuBound) {
-            wrap.addEventListener('contextmenu', function(e) {
-                const div = e.target.closest('.site-item');
-                if (div) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const id = parseInt(div.dataset.id);
-                    const url = div.dataset.url;
-                    showContextMenu(e.clientX, e.clientY, id, url);
-                }
-            });
-            wrap._contextMenuBound = true;
-        }
+        wrap._contextMenuBound = false;
+        // 🔥 注意：不在这里绑定事件！只恢复内容
         
         // 恢复滚动位置
         restoreScrollPosition();
@@ -252,7 +221,6 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
     const tagsHTML = localStorage.getItem('tagsHTML');
     if (tagsHTML && tagsList) {
         tagsList.innerHTML = tagsHTML;
-        // 重新绑定标签点击事件
         rebindTagEvents();
     }
     
@@ -264,7 +232,6 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
             if (Array.isArray(parsed) && parsed.length > 0) {
                 siteList = parsed;
                 hasCache = true;
-                // 如果没有卡片 HTML 缓存，才需要渲染
                 if (!cardHTML) {
                     hideSkeleton();
                     renderAll();
@@ -310,7 +277,6 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
         
         localStorage.setItem('siteList', JSON.stringify(siteList));
         
-        // 数据更新后重新渲染（会覆盖缓存的 HTML）
         hideSkeleton();
         renderAll();
         restoreScrollPosition();
@@ -329,7 +295,6 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
     }
 }
 
-
 // ============================================================
 //  重新绑定标签事件
 // ============================================================
@@ -339,11 +304,9 @@ function rebindTagEvents() {
     if (!tagsList) return;
     
     tagsList.querySelectorAll('.tag-item').forEach(item => {
-        // 移除旧事件（如果有）
         const newItem = item.cloneNode(true);
         item.parentNode.replaceChild(newItem, item);
         
-        // 绑定新事件
         newItem.onclick = function() {
             if (isTagSortMode) return;
             document.querySelectorAll('.tag-item').forEach(t => t.classList.remove('active'));
@@ -418,7 +381,6 @@ function renderTagsFilter() {
         activeTag = 'all';
         saveActiveTag('all');
         renderList();
-        // 移动端自动收起标签栏
         if (isMobileDevice()) {
             const wrap = document.getElementById('tagsFilterWrap');
             if (wrap) wrap.classList.remove('expanded');
@@ -439,7 +401,6 @@ function renderTagsFilter() {
             activeTag = tag;
             saveActiveTag(tag);
             renderList();
-            // 移动端自动收起标签栏
             if (isMobileDevice()) {
                 const wrap = document.getElementById('tagsFilterWrap');
                 if (wrap) wrap.classList.remove('expanded');
@@ -480,12 +441,9 @@ function renderTagsFilter() {
         initTagSortable();
     }
 
-    // 🔥 保存标签 HTML 到 localStorage
     try {
         localStorage.setItem('tagsHTML', tagsList.innerHTML);
-    } catch (e) {
-        // 存储失败不影响功能
-    }
+    } catch (e) {}
 }
 
 // ============================================================
@@ -564,7 +522,6 @@ function getFilteredList() {
     const keyword = searchInput ? searchInput.value.trim().toLowerCase() : '';
     let list = [...siteList];
     
-    // 🔥 标签只用于浏览，搜索时忽略
     if (!keyword && activeTag !== 'all') {
         list = list.filter(s => s.tags && Array.isArray(s.tags) && s.tags.includes(activeTag));
     }
@@ -611,15 +568,14 @@ function renderList() {
         return;
     }
 
-    // ===== 🔥 增量更新：检查是否可以复用现有 DOM =====
+    // ===== 🔥 先检查是否需要重建，还是只需要绑定事件 =====
     const existingItems = wrap.querySelectorAll('.site-item');
     const existingCount = existingItems.length;
     const newCount = filtered.length;
 
     // 如果数量相同，尝试复用 DOM
-    if (existingCount === newCount) {
+    if (existingCount === newCount && existingCount > 0) {
         let needRebuild = false;
-        // 检查数据是否有变化（通过 id 对比）
         existingItems.forEach((el, index) => {
             const id = parseInt(el.dataset.id);
             if (id !== filtered[index].id) {
@@ -632,7 +588,10 @@ function renderList() {
             existingItems.forEach((el, index) => {
                 updateItemContent(el, filtered[index]);
             });
-            // 仍然需要确保拖拽状态正确
+            
+            // 🔥 确保事件已绑定（如果是卡片 HTML 缓存恢复后首次调用，需要绑定事件）
+            bindCardEvents(wrap);
+            
             if (!isDragLocked) {
                 setTimeout(() => initSortableDrag(), 50);
             }
@@ -653,23 +612,18 @@ function renderList() {
         div.setAttribute('data-url', site.url || '');
         div.setAttribute('data-id', site.id || '');
 
-        // ===== 图标渲染（首字母占位 + 懒加载） =====
         let iconHtml = '';
         if (site.icon && site.icon.length <= 2 && !site.icon.startsWith('http')) {
             iconHtml = `<div class="site-icon" style="background:#00b866;">${site.icon}</div>`;
         } else {
-            // 检查 localStorage 缓存
             const cacheKey = 'icon_' + site.id;
             const cached = localStorage.getItem(cacheKey);
             
             if (cached) {
-                // 有缓存 → 直接显示图标
                 iconHtml = `<div class="site-icon" style="background:transparent;"><img src="${cached}" alt="${site.name || '链接'}" style="width:100%;height:100%;object-fit:cover;"></div>`;
             } else {
-                // 无缓存 → 先显示首字母占位
                 const letter = (site.name || '链接').charAt(0).toUpperCase();
                 iconHtml = `<div class="site-icon" style="background:#00b866;font-size:24px;font-weight:bold;color:#fff;display:flex;align-items:center;justify-content:center;">${letter}</div>`;
-                // 记录到懒加载队列
                 lazyItems.push({ div, site });
             }
         }
@@ -684,7 +638,6 @@ function renderList() {
                 '</div>';
         }
 
-        // ===== 测速显示 =====
         let latencyText = '未测速';
         let latencyClass = '';
         const url = site.url || '';
@@ -697,7 +650,6 @@ function renderList() {
                 latencyText = '失效';
                 latencyClass = 'latency-timeout';
             } else if (typeof result === 'number' && result > 0) {
-                // 只显示延迟时间（毫秒）
                 latencyText = result + ' ms';
                 latencyClass = 'latency-success';
             } else {
@@ -719,7 +671,6 @@ function renderList() {
 
         div.style.cursor = 'pointer';
 
-        // ---- 点击反馈：按下动画 ----
         div.addEventListener('mousedown', function(e) {
             if (e.button === 0) {
                 this.style.transform = 'scale(0.95)';
@@ -737,17 +688,14 @@ function renderList() {
             this.style.transition = 'transform 0.1s';
         });
 
-        // ---- 悬停提示 ----
         div.title = '点击打开链接';
 
-        // ---- 右键菜单 ----
         div.addEventListener('contextmenu', function(e) {
             e.preventDefault();
             e.stopPropagation();
             showContextMenu(e.clientX, e.clientY, site.id, site.url);
         });
 
-        // PC 长按编辑
         div.addEventListener('mousedown', () => {
             if (!isMobileDevice()) {
                 longPressTimer = setTimeout(() => openEditModal(site.id), 800);
@@ -760,7 +708,6 @@ function renderList() {
         div.addEventListener('mouseup', () => clearTimeout(longPressTimer));
         div.addEventListener('mouseleave', () => clearTimeout(longPressTimer));
 
-        // 移动端触屏收起标签
         div.addEventListener('touchstart', () => {
             const wrap2 = document.getElementById('tagsFilterWrap');
             if (wrap2 && wrap2.classList.contains('expanded')) {
@@ -778,11 +725,29 @@ function renderList() {
         const cardHTML = wrap.innerHTML;
         localStorage.setItem('cardHTML', cardHTML);
         localStorage.setItem('cardHTMLTime', String(Date.now()));
-    } catch (e) {
-        // 存储失败不影响功能
-    }
+    } catch (e) {}
 
-    // ===== 委托点击事件（只绑定一次，统一处理所有卡片点击） =====
+    // ===== 🔥 绑定卡片事件（统一入口） =====
+    bindCardEvents(wrap);
+
+    setTimeout(() => {
+        if (!isDragLocked) initSortableDrag();
+        isRendering = false;
+        
+        if (lazyItems.length > 0) {
+            startLazyLoad(lazyItems);
+        }
+    }, 50);
+}
+
+// ============================================================
+//  🔥 统一绑定卡片事件（防止重复）
+// ============================================================
+
+function bindCardEvents(wrap) {
+    if (!wrap) return;
+    
+    // 🔥 点击事件 - 只绑定一次
     if (!wrap._clickBound) {
         wrap.addEventListener('click', function(e) {
             const item = e.target.closest('.site-item');
@@ -795,16 +760,21 @@ function renderList() {
         });
         wrap._clickBound = true;
     }
-
-    setTimeout(() => {
-        if (!isDragLocked) initSortableDrag();
-        isRendering = false;
-        
-        // ===== 启动懒加载图标 =====
-        if (lazyItems.length > 0) {
-            startLazyLoad(lazyItems);
-        }
-    }, 50);
+    
+    // 🔥 右键菜单事件 - 只绑定一次
+    if (!wrap._contextMenuBound) {
+        wrap.addEventListener('contextmenu', function(e) {
+            const div = e.target.closest('.site-item');
+            if (div) {
+                e.preventDefault();
+                e.stopPropagation();
+                const id = parseInt(div.dataset.id);
+                const url = div.dataset.url;
+                showContextMenu(e.clientX, e.clientY, id, url);
+            }
+        });
+        wrap._contextMenuBound = true;
+    }
 }
 
 // ============================================================
@@ -812,7 +782,6 @@ function renderList() {
 // ============================================================
 
 function updateItemContent(el, site) {
-    // 更新测速标签
     const latencyTag = el.querySelector('.latency-tag');
     if (latencyTag) {
         const url = site.url || '';
@@ -834,7 +803,6 @@ function updateItemContent(el, site) {
         }
     }
 
-    // 更新标签
     const tagsContainer = el.querySelector('.site-tags');
     if (tagsContainer) {
         if (site.tags && Array.isArray(site.tags) && site.tags.length) {
@@ -847,15 +815,12 @@ function updateItemContent(el, site) {
         }
     }
 
-    // 更新名称
     const nameEl = el.querySelector('.site-name');
     if (nameEl) nameEl.textContent = site.name || '未命名';
 
-    // 更新 URL
     const urlEl = el.querySelector('.site-url');
     if (urlEl) urlEl.textContent = site.url || '';
 
-    // 更新 data 属性
     el.dataset.url = site.url || '';
     el.dataset.id = site.id || '';
 }
@@ -873,7 +838,6 @@ function renderAll() {
 let contextMenuEl = null;
 
 function showContextMenu(x, y, id, url) {
-    // 如果已有菜单，先关闭
     if (contextMenuEl) {
         closeContextMenu();
     }
@@ -901,7 +865,6 @@ function showContextMenu(x, y, id, url) {
         menu.style.color = '#e5e5e5';
     }
 
-    // 确保菜单不超出屏幕
     const rect = menu.getBoundingClientRect();
     if (x + rect.width > window.innerWidth) {
         menu.style.left = (x - rect.width) + 'px';
@@ -952,38 +915,30 @@ function showContextMenu(x, y, id, url) {
 
     document.body.appendChild(menu);
     contextMenuEl = menu;
-
-    // 保存菜单引用以便清理
     menu._id = id;
 
-    // ---- 滚动时关闭菜单 ----
     const scrollHandler = function() {
         closeContextMenu();
     };
 
-    // ---- 点击页面其他位置关闭菜单 ----
     const clickHandler = function(e) {
         if (contextMenuEl && !contextMenuEl.contains(e.target)) {
             closeContextMenu();
         }
     };
 
-    // ---- 触屏点击其他地方关闭 ----
     const touchHandler = function(e) {
         if (contextMenuEl && !contextMenuEl.contains(e.target)) {
             closeContextMenu();
         }
     };
 
-    // 保存清理函数引用
     menu._scrollHandler = scrollHandler;
     menu._clickHandler = clickHandler;
     menu._touchHandler = touchHandler;
 
-    // 绑定事件
     setTimeout(() => {
         window.addEventListener('scroll', scrollHandler, { passive: true });
-        // 延迟绑定点击事件，防止点击菜单时立即触发关闭
         setTimeout(() => {
             document.addEventListener('click', clickHandler);
             document.addEventListener('touchstart', touchHandler, { passive: true });
@@ -993,7 +948,6 @@ function showContextMenu(x, y, id, url) {
 
 function closeContextMenu() {
     if (contextMenuEl) {
-        // 清理所有事件监听
         if (contextMenuEl._scrollHandler) {
             window.removeEventListener('scroll', contextMenuEl._scrollHandler);
         }
@@ -1165,7 +1119,6 @@ function openEditModal(id = null) {
     modal.classList.add('show');
     if (nameInput) nameInput.focus();
     
-    // 移动端：延迟调整弹窗位置，防止键盘遮挡
     if (isMobileDevice()) {
         setTimeout(() => {
             const activeElement = document.activeElement;
@@ -1488,7 +1441,6 @@ async function testLatency(url) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
         
-        // 🔥 关键：使用 mode: 'no-cors'
         await fetch(url, { 
             method: 'HEAD', 
             mode: 'no-cors', 
@@ -1522,10 +1474,8 @@ async function batchTestLatency() {
     const btn = document.getElementById('refreshBtn');
     if (btn) btn.disabled = true;
     
-    // 获取所有卡片元素
     const allItems = document.querySelectorAll('.site-item');
     
-    // 先让所有卡片显示"测速中"
     allItems.forEach((item, index) => {
         if (index < list.length) {
             const tag = item.querySelector('.latency-tag');
@@ -1538,13 +1488,11 @@ async function batchTestLatency() {
     
     showToast('测速中...');
     
-    // 如果已有 Worker，先终止
     if (worker) {
         worker.terminate();
         worker = null;
     }
     
-    // 创建新的 Worker
     try {
         worker = new Worker('worker.js');
     } catch (err) {
@@ -1553,14 +1501,12 @@ async function batchTestLatency() {
         return;
     }
     
-    // 监听 Worker 返回的结果
     worker.addEventListener('message', function(e) {
         const data = e.data;
         
         if (data.type === 'result') {
             const { index, url, latency } = data;
             
-            // 更新缓存
             if (latency === '超时' || latency === '失效') {
                 latencyCache[url] = latency;
             } else if (typeof latency === 'number' && latency > 0) {
@@ -1568,7 +1514,6 @@ async function batchTestLatency() {
             }
             saveLatencyCache();
             
-            // 更新对应的卡片
             const items = document.querySelectorAll('.site-item');
             if (items[index]) {
                 const tag = items[index].querySelector('.latency-tag');
@@ -1606,7 +1551,6 @@ async function batchTestLatency() {
         }
     });
     
-    // 发送测速任务到 Worker
     const urls = list.map(site => site.url);
     worker.postMessage({ urls });
 }
@@ -1629,7 +1573,6 @@ async function handleFileImport(event) {
             const data = JSON.parse(e.target.result);
             if (!Array.isArray(data)) { showToast('格式错误：需要数组'); return; }
 
-            // 🔥 获取当前已有的 URL 列表（用于去重）
             const existingUrls = new Set(siteList.map(s => s.url));
 
             const allImportData = data
@@ -1645,7 +1588,6 @@ async function handleFileImport(event) {
                     sort: item.sort_order || item.sort || 0
                 }));
 
-            // 🔥 过滤掉已存在的 URL
             const importData = allImportData.filter(item => !existingUrls.has(item.url));
             const skippedCount = allImportData.length - importData.length;
 
@@ -1659,7 +1601,6 @@ async function handleFileImport(event) {
                 return;
             }
 
-            // 🔥 显示导入预览
             showToast(`共 ${allImportData.length} 条，其中 ${skippedCount} 条已存在，将导入 ${importData.length} 条新数据`);
 
             const BATCH_SIZE = 20;
@@ -1741,7 +1682,6 @@ function handleScroll() {
     if (btn) {
         btn.classList.toggle('show', window.scrollY > SCROLL_THRESHOLD);
     }
-    // 保存滚动位置（每500ms保存一次，避免频繁写入）
     if (document.getElementById('mainPage') && document.getElementById('mainPage').style.display !== 'none') {
         clearTimeout(window._scrollSaveTimer);
         window._scrollSaveTimer = setTimeout(saveScrollPosition, 500);
@@ -1758,7 +1698,6 @@ function backToTop() {
 
 function initKeyboardShortcuts() {
     document.addEventListener('keydown', function(e) {
-        // Ctrl+K 或 Cmd+K → 聚焦搜索框
         if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
             e.preventDefault();
             const searchInput = document.getElementById('searchInput');
@@ -1768,7 +1707,6 @@ function initKeyboardShortcuts() {
             }
         }
         
-        // ESC → 关闭弹窗
         if (e.key === 'Escape') {
             const addModal = document.getElementById('addModal');
             if (addModal && addModal.classList.contains('show')) {
@@ -1778,7 +1716,6 @@ function initKeyboardShortcuts() {
             if (adminModal && adminModal.classList.contains('show')) {
                 closeAdminPanel();
             }
-            // 如果搜索框有内容且有焦点，清除内容并失焦
             const searchInput = document.getElementById('searchInput');
             if (searchInput && document.activeElement === searchInput) {
                 searchInput.blur();
@@ -1795,7 +1732,6 @@ function initSortSelector() {
     const sortSelect = document.getElementById('sortSelect');
     if (!sortSelect) return;
     
-    // 恢复排序偏好
     const saved = localStorage.getItem('sortPreference');
     if (saved) {
         sortSelect.value = saved;
@@ -1820,7 +1756,6 @@ function initApp() {
     loadLatencyCache();
     initSortSelector();
     
-    // 恢复排序偏好并加载数据
     const sortSelect = document.getElementById('sortSelect');
     if (sortSelect) {
         const saved = localStorage.getItem('sortPreference');
@@ -2038,7 +1973,6 @@ if (addModal) {
     addModal.addEventListener('click', (e) => {
         if (e.target === addModal) closeModal();
     });
-    // 🔥 新增：弹窗内按 Enter 提交
     addModal.addEventListener('keydown', function(e) {
         if (e.key === 'Enter' && addModal.classList.contains('show')) {
             const confirmBtn = document.getElementById('modalConfirmBtn');
@@ -2197,26 +2131,21 @@ document.addEventListener('DOMContentLoaded', function() {
     var loginPage = document.getElementById('loginPage');
     var mainPage = document.getElementById('mainPage');
     
-    // 主页面默认已显示（HTML中 style="display:block"）
-    // 先让用户看到缓存数据，同时异步检查登录状态
     if (token && user) {
         try {
             var userData = JSON.parse(user);
             if (userData.username) {
-                // ✅ 已登录：主页面保持显示
                 if (loginPage) {
                     loginPage.style.display = 'none';
                     loginPage.classList.remove('show');
                 }
                 if (mainPage) mainPage.style.display = 'block';
                 
-                // 更新用户信息
                 var nameEl = document.getElementById('displayUsername');
                 var roleEl = document.getElementById('displayRole');
                 if (nameEl) nameEl.textContent = userData.username || '用户';
                 if (roleEl) roleEl.textContent = userData.role === 'admin' ? '管理员' : '普通';
                 
-                // 初始化应用（loadLinks 会先读缓存，秒开）
                 if (typeof initApp === 'function') {
                     initApp();
                 }
@@ -2225,7 +2154,6 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch(e) {}
     }
     
-    // ❌ 未登录：跳转到登录页
     if (loginPage) {
         loginPage.style.display = 'flex';
         loginPage.classList.add('show');
@@ -2243,7 +2171,6 @@ let isLoadingIcons = false;
 const BATCH_SIZE = 5;
 
 function startLazyLoad(items) {
-    // 只保留没有缓存的
     iconLoadQueue = items.filter(({ site }) => {
         const cacheKey = 'icon_' + site.id;
         return !localStorage.getItem(cacheKey);
@@ -2251,12 +2178,10 @@ function startLazyLoad(items) {
     
     if (iconLoadQueue.length === 0) return;
     
-    // 立即加载第一屏可见的（最多5个）
     setTimeout(() => {
         loadVisibleIcons();
     }, 100);
     
-    // 创建 IntersectionObserver
     if (lazyObserver) {
         lazyObserver.disconnect();
     }
@@ -2274,7 +2199,7 @@ function startLazyLoad(items) {
         });
         
         if (toLoad.length > 0) {
-            // 每次最多加载 BATCH_SIZE 个            const batch = toLoad.slice(0, BATCH_SIZE);
+            const batch = toLoad.slice(0, BATCH_SIZE);
             batch.forEach(({ div, site }) => {
                 loadSingleIcon(div, site);
             });
@@ -2284,7 +2209,6 @@ function startLazyLoad(items) {
         threshold: 0.01
     });
     
-    // 开始观察所有卡片
     iconLoadQueue.forEach(({ div }) => {
         lazyObserver.observe(div);
     });
@@ -2311,7 +2235,6 @@ function loadSingleIcon(div, site) {
     if (!iconEl) return;
     if (iconEl.querySelector('img')) return;
     
-    // 再次检查 localStorage 缓存
     const cacheKey = 'icon_' + site.id;
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
@@ -2331,19 +2254,15 @@ function loadSingleIcon(div, site) {
         return;
     }
     
-    // 直接拉取网站 favicon
     let iconUrl;
     try {
         const u = new URL(site.url || '');
         iconUrl = `${u.protocol}//${u.hostname}/favicon.ico`;
     } catch {
-        // URL 解析失败，保留首字母
         return;
     }
     
-    // 加载图片
     const img = new Image();
-    // img.crossOrigin = 'anonymous';
     img.onload = function() {
         iconEl.innerHTML = '';
         iconEl.style.background = 'transparent';
@@ -2361,7 +2280,6 @@ function loadSingleIcon(div, site) {
         localStorage.setItem(cacheKey, iconUrl);
     };
     img.onerror = function() {
-        // 加载失败，保留首字母
         div._iconLoaded = false;
     };
     img.src = iconUrl;
