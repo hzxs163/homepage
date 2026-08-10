@@ -69,11 +69,17 @@ function doLogout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     authUser = null;
+    
+    // 🔥 清除标签解锁状态
+    if (typeof clearUnlockedTags === 'function') {
+        clearUnlockedTags();
+    }
+    
     const loginPage = document.getElementById('loginPage');
     const mainPage = document.getElementById('mainPage');
     if (loginPage) {
         loginPage.style.display = 'flex';
-        loginPage.classList.add('show');  // 🔥 加上 .show 类
+        loginPage.classList.add('show');
     }
     if (mainPage) mainPage.style.display = 'none';
     showToast('已退出');
@@ -85,7 +91,7 @@ function enterMainPage() {
     const mainPage = document.getElementById('mainPage');
     if (loginPage) {
         loginPage.style.display = 'none';
-        loginPage.classList.remove('show');  // 🔥 移除 .show 类
+        loginPage.classList.remove('show');
     }
     if (mainPage) mainPage.style.display = 'block';
     
