@@ -89,6 +89,9 @@
                         <div class="dropdown-item menu-theme" id="menuTheme">🌞 切换主题</div>
                         <div class="dropdown-divider"></div>
                         <div class="dropdown-item menu-admin" id="adminMenuItem" style="display:none;">👥 管理</div>
+                        <!-- 🔥 新增：标签密码管理入口 -->
+                        <div class="dropdown-item menu-tag-password" id="tagPasswordMenuItem">🔐 标签密码管理</div>
+                        <div class="dropdown-divider"></div>
                         <div class="dropdown-item logout-item" id="logoutMenuItem">🚪 退出</div>
                     </div>
                 </div>
@@ -168,6 +171,72 @@
         </div>
         <div class="modal-footer">
             <button class="modal-cancel" id="adminModalCloseBtn2">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 🔥 标签密码输入弹窗 ==================== -->
+<div class="modal-mask" id="tagPasswordModal">
+    <div class="modal-container" style="max-width:400px;">
+        <div class="modal-header">
+            <h3 class="modal-title" id="tagPasswordTitle">🔒 请输入标签密码</h3>
+            <button class="modal-close" id="tagPasswordCloseBtn">×</button>
+        </div>
+        <div class="modal-form">
+            <div class="form-item">
+                <label id="tagPasswordLabel">标签「私密」需要密码才能访问</label>
+                <input type="password" id="tagPasswordInput" placeholder="请输入密码..." autocomplete="off">
+                <div id="tagPasswordError" style="color:#ef4444;font-size:14px;margin-top:8px;display:none;">密码错误，请重试</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-cancel" id="tagPasswordCancelBtn">取消</button>
+            <button class="modal-confirm" id="tagPasswordConfirmBtn">确认</button>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 🔥 标签密码管理弹窗 ==================== -->
+<div class="modal-mask" id="tagPasswordManagerModal">
+    <div class="modal-container" style="max-width:500px;">
+        <div class="modal-header">
+            <h3 class="modal-title">🔐 标签密码管理</h3>
+            <button class="modal-close" id="tagPasswordManagerCloseBtn">×</button>
+        </div>
+        <div class="modal-form">
+            <div style="margin-bottom:12px;font-size:14px;color:#6b7280;">
+                为标签设置密码后，点击该标签时需要输入密码才能查看内容。
+            </div>
+            <div id="tagPasswordManagerList" style="max-height:300px;overflow-y:auto;"></div>
+            <div class="tags-tips" id="tagPasswordManagerMsg"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-cancel" id="tagPasswordManagerCloseBtn2">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 🔥 设置标签密码弹窗 ==================== -->
+<div class="modal-mask" id="setTagPasswordModal">
+    <div class="modal-container" style="max-width:400px;">
+        <div class="modal-header">
+            <h3 class="modal-title" id="setTagPasswordTitle">设置标签密码</h3>
+            <button class="modal-close" id="setTagPasswordCloseBtn">×</button>
+        </div>
+        <div class="modal-form">
+            <div class="form-item">
+                <label>新密码（至少4位）</label>
+                <input type="password" id="setTagPasswordInput" placeholder="请输入密码..." autocomplete="off">
+            </div>
+            <div class="form-item">
+                <label>确认密码</label>
+                <input type="password" id="setTagPasswordConfirm" placeholder="请再次输入密码..." autocomplete="off">
+            </div>
+            <div id="setTagPasswordError" style="color:#ef4444;font-size:14px;display:none;"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-cancel" id="setTagPasswordCancelBtn">取消</button>
+            <button class="modal-confirm" id="setTagPasswordConfirmBtn">确认设置</button>
         </div>
     </div>
 </div>
