@@ -639,6 +639,9 @@ function renderList() {
 
     // ===== 数量不同或数据变化 → 完全重建 =====
     wrap.innerHTML = '';
+    // 🔥 重置事件绑定标记，让 bindCardEvents 重新绑定
+    wrap._clickBound = false;
+    wrap._contextMenuBound = false;
     const frag = document.createDocumentFragment();
     const lazyItems = [];
 
