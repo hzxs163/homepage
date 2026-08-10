@@ -309,9 +309,15 @@ function rebindTagEvents() {
         
         newItem.onclick = function() {
             if (isTagSortMode) return;
+            const tagName = this.dataset.tag;
+            const passwordHash = getTagPasswordHash(tagName);
+            if (passwordHash && !isTagUnlocked(tagName)) {
+                showTagPasswordModal(tagName, passwordHash);
+                return;
+            }
             document.querySelectorAll('.tag-item').forEach(t => t.classList.remove('active'));
             this.classList.add('active');
-            activeTag = this.dataset.tag;
+            activeTag = tagName;
             saveActiveTag(activeTag);
             renderList();
             if (isMobileDevice()) {
@@ -391,15 +397,23 @@ function renderTagsFilter() {
     allTags.forEach(tag => {
         const item = document.createElement('div');
         item.className = `tag-item ${activeTag === tag ? 'active' : ''}`;
-        item.innerText = tag;
+        const passwordHash = getTagPasswordHash(tag);
+        const lockIcon = passwordHash ? '🔒 ' : '';
+        item.innerText = lockIcon + tag;
         item.dataset.tag = tag;
         item.dataset.sortable = 'true';
-        item.onclick = () => {
+        item.onclick = async function() {
             if (isTagSortMode) return;
+            const tagName = this.dataset.tag;
+            const passwordHash = getTagPasswordHash(tagName);
+            if (passwordHash && !isTagUnlocked(tagName)) {
+                showTagPasswordModal(tagName, passwordHash);
+                return;
+            }
             document.querySelectorAll('.tag-item').forEach(t => t.classList.remove('active'));
-            item.classList.add('active');
-            activeTag = tag;
-            saveActiveTag(tag);
+            this.classList.add('active');
+            activeTag = tagName;
+            saveActiveTag(tagName);
             renderList();
             if (isMobileDevice()) {
                 const wrap = document.getElementById('tagsFilterWrap');
@@ -521,6 +535,17 @@ function getFilteredList() {
     const searchInput = document.getElementById('searchInput');
     const keyword = searchInput ? searchInput.value.trim().toLowerCase() : '';
     let list = [...siteList];
+    
+    // 过滤加密标签中未解锁的网站
+    const passwords = loadTagPasswords();
+    const encryptedTags = Object.keys(passwords).filter(t => passwords[t] && passwords[t] !== '');
+    if (encryptedTags.length > 0) {
+        list = list.filter(site => {
+            if (!site.tags || !Array.isArray(site.tags) || site.tags.length === 0) return true;
+            const hasEncryptedLocked = site.tags.some(tag => encryptedTags.includes(tag) && !isTagUnlocked(tag));
+            return !hasEncryptedLocked;
+        });
+    }
     
     if (!keyword && activeTag !== 'all') {
         list = list.filter(s => s.tags && Array.isArray(s.tags) && s.tags.includes(activeTag));
@@ -2031,6 +2056,9 @@ if (adminModal) {
     var adminItem = document.getElementById('adminMenuItem');
     var logoutItem = document.getElementById('logoutMenuItem');
 
+    // 🔥 新增：标签密码管理入口
+    var tagPasswordMenuItem = document.getElementById('tagPasswordMenuItem');
+
     if (menuAdd) {
         menuAdd.addEventListener('click', function() {
             if (typeof openEditModal === 'function') {
@@ -2089,6 +2117,16 @@ if (adminModal) {
         adminItem.addEventListener('click', function() {
             if (typeof openAdminPanel === 'function') {
                 openAdminPanel();
+            }
+            dropdown.classList.remove('open');
+        });
+    }
+
+    // 🔥 标签密码管理入口事件
+    if (tagPasswordMenuItem) {
+        tagPasswordMenuItem.addEventListener('click', function() {
+            if (typeof openTagPasswordManager === 'function') {
+                openTagPasswordManager();
             }
             dropdown.classList.remove('open');
         });
@@ -2293,3 +2331,268 @@ function cleanupLazyLoad() {
     iconLoadQueue = [];
     isLoadingIcons = false;
 }
+
+// ============================================================
+//  🔐 标签密码管理
+// ============================================================
+
+const DEFAULT_TAG_PASSWORDS = {
+    "私密": "7c6a180b36896a0a8c02787eeafb0e4c1f6e2c5c6e3d4f8a9b0c1d2e3f4a5b6c7"
+};
+
+function loadTagPasswords() {
+    try {
+        const saved = localStorage.getItem('tagPasswords');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Object.keys(parsed).length > 0) return parsed;
+        }
+    } catch { }
+    saveTagPasswords(DEFAULT_TAG_PASSWORDS);
+    return { ...DEFAULT_TAG_PASSWORDS };
+}
+
+function saveTagPasswords(passwords) {
+    localStorage.setItem('tagPasswords', JSON.stringify(passwords));
+}
+
+function getTagPasswordHash(tagName) {
+    const passwords = loadTagPasswords();
+    return passwords[tagName] || null;
+}
+
+async function setTagPassword(tagName, plainPassword) {
+    const passwords = loadTagPasswords();
+    if (plainPassword && plainPassword.trim() !== '') {
+        const hash = await sha256(plainPassword.trim());
+        passwords[tagName] = hash;
+    } else {
+        delete passwords[tagName];
+    }
+    saveTagPasswords(passwords);
+}
+
+function isTagUnlocked(tagName) {
+    try {
+        const unlocked = JSON.parse(sessionStorage.getItem('unlockedTags') || '[]');
+        return unlocked.includes(tagName);
+    } catch { return false; }
+}
+
+function markTagAsUnlocked(tagName) {
+    const unlocked = JSON.parse(sessionStorage.getItem('unlockedTags') || '[]');
+    if (!unlocked.includes(tagName)) {
+        unlocked.push(tagName);
+        sessionStorage.setItem('unlockedTags', JSON.stringify(unlocked));
+    }
+}
+
+function clearUnlockedTags() {
+    sessionStorage.removeItem('unlockedTags');
+}
+
+async function sha256(message) {
+    const msgBuffer = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ============================================================
+//  标签密码弹窗
+// ============================================================
+
+let pendingTagName = null;
+let pendingTagHash = null;
+
+function showTagPasswordModal(tagName, passwordHash) {
+    pendingTagName = tagName;
+    pendingTagHash = passwordHash;
+    document.getElementById('tagPasswordTitle').textContent = '🔒 请输入标签密码';
+    document.getElementById('tagPasswordLabel').textContent = `标签「${tagName}」需要密码才能访问`;
+    document.getElementById('tagPasswordInput').value = '';
+    document.getElementById('tagPasswordError').style.display = 'none';
+    document.getElementById('tagPasswordModal').classList.add('show');
+    setTimeout(() => {
+        document.getElementById('tagPasswordInput').focus();
+    }, 100);
+}
+
+function closeTagPasswordModal() {
+    document.getElementById('tagPasswordModal').classList.remove('show');
+    pendingTagName = null;
+    pendingTagHash = null;
+}
+
+async function confirmTagPassword() {
+    const input = document.getElementById('tagPasswordInput').value.trim();
+    if (!input) {
+        document.getElementById('tagPasswordError').textContent = '请输入密码';
+        document.getElementById('tagPasswordError').style.display = 'block';
+        return;
+    }
+    const inputHash = await sha256(input);
+    if (inputHash === pendingTagHash) {
+        markTagAsUnlocked(pendingTagName);
+        closeTagPasswordModal();
+        showToast(`✅ 标签「${pendingTagName}」已解锁`);
+        const tagItems = document.querySelectorAll('.tag-item');
+        tagItems.forEach(item => {
+            item.classList.remove('active');
+            if (item.dataset.tag === pendingTagName) {
+                item.classList.add('active');
+            }
+        });
+        activeTag = pendingTagName;
+        saveActiveTag(pendingTagName);
+        renderList();
+        if (isMobileDevice()) {
+            const wrap = document.getElementById('tagsFilterWrap');
+            if (wrap) wrap.classList.remove('expanded');
+        }
+    } else {
+        document.getElementById('tagPasswordError').textContent = '❌ 密码错误，请重试';
+        document.getElementById('tagPasswordError').style.display = 'block';
+        document.getElementById('tagPasswordInput').value = '';
+        document.getElementById('tagPasswordInput').focus();
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('tagPasswordModal');
+    if (modal) {
+        document.getElementById('tagPasswordCloseBtn').addEventListener('click', closeTagPasswordModal);
+        document.getElementById('tagPasswordCancelBtn').addEventListener('click', closeTagPasswordModal);
+        document.getElementById('tagPasswordConfirmBtn').addEventListener('click', confirmTagPassword);
+        document.getElementById('tagPasswordInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') confirmTagPassword();
+        });
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) closeTagPasswordModal();
+        });
+    }
+});
+
+// ============================================================
+//  标签密码管理界面
+// ============================================================
+
+function openTagPasswordManager() {
+    const modal = document.getElementById('tagPasswordManagerModal');
+    if (!modal) return;
+    modal.classList.add('show');
+    renderTagPasswordManagerList();
+}
+
+function closeTagPasswordManager() {
+    document.getElementById('tagPasswordManagerModal').classList.remove('show');
+}
+
+function renderTagPasswordManagerList() {
+    const list = document.getElementById('tagPasswordManagerList');
+    if (!list) return;
+    const allTags = getAllTags();
+    const passwords = loadTagPasswords();
+    if (allTags.length === 0) {
+        list.innerHTML = '<div style="padding:20px;text-align:center;color:#6b7280;">暂无标签</div>';
+        return;
+    }
+    let html = '';
+    allTags.forEach(tag => {
+        const hasPassword = passwords[tag] && passwords[tag] !== '';
+        html += `
+            <div class="tag-password-item" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f0f0f0;gap:10px;">
+                <span style="font-weight:500;font-size:14px;min-width:80px;">${tag}</span>
+                <span style="font-size:13px;color:#6b7280;flex:1;">${hasPassword ? '🔒 已加密' : '🔓 未加密'}</span>
+                <button class="tag-password-set-btn" data-tag="${tag}" style="padding:4px 14px;border:1px solid #e8f8f0;border-radius:6px;background:#f9fbfc;cursor:pointer;font-size:13px;color:#4b5563;">${hasPassword ? '修改' : '设置'}</button>
+                ${hasPassword ? `<button class="tag-password-remove-btn" data-tag="${tag}" style="padding:4px 10px;border:1px solid #fef2f2;border-radius:6px;background:#fef2f2;cursor:pointer;font-size:13px;color:#ef4444;">移除</button>` : ''}
+            </div>
+        `;
+    });
+    list.innerHTML = html;
+    list.querySelectorAll('.tag-password-set-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const tag = this.dataset.tag;
+            showSetTagPasswordModal(tag);
+        });
+    });
+    list.querySelectorAll('.tag-password-remove-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const tag = this.dataset.tag;
+            if (confirm(`确定要移除标签「${tag}」的密码吗？`)) {
+                setTagPassword(tag, '');
+                renderTagPasswordManagerList();
+                showToast(`✅ 已移除标签「${tag}」的密码`);
+            }
+        });
+    });
+}
+
+// ============================================================
+//  设置标签密码弹窗
+// ============================================================
+
+let settingTagName = null;
+
+function showSetTagPasswordModal(tagName) {
+    settingTagName = tagName;
+    document.getElementById('setTagPasswordTitle').textContent = `设置「${tagName}」的密码`;
+    document.getElementById('setTagPasswordInput').value = '';
+    document.getElementById('setTagPasswordConfirm').value = '';
+    document.getElementById('setTagPasswordError').style.display = 'none';
+    document.getElementById('setTagPasswordModal').classList.add('show');
+    setTimeout(() => {
+        document.getElementById('setTagPasswordInput').focus();
+    }, 100);
+}
+
+function closeSetTagPasswordModal() {
+    document.getElementById('setTagPasswordModal').classList.remove('show');
+    settingTagName = null;
+}
+
+async function confirmSetTagPassword() {
+    const input = document.getElementById('setTagPasswordInput').value;
+    const confirm = document.getElementById('setTagPasswordConfirm').value;
+    const errorEl = document.getElementById('setTagPasswordError');
+    if (!input || input.length < 4) {
+        errorEl.textContent = '密码至少 4 位';
+        errorEl.style.display = 'block';
+        return;
+    }
+    if (input !== confirm) {
+        errorEl.textContent = '两次输入的密码不一致';
+        errorEl.style.display = 'block';
+        return;
+    }
+    await setTagPassword(settingTagName, input);
+    closeSetTagPasswordModal();
+    renderTagPasswordManagerList();
+    showToast(`✅ 已为标签「${settingTagName}」设置密码`);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const setModal = document.getElementById('setTagPasswordModal');
+    if (setModal) {
+        document.getElementById('setTagPasswordCloseBtn')?.addEventListener('click', closeSetTagPasswordModal);
+        document.getElementById('setTagPasswordCancelBtn')?.addEventListener('click', closeSetTagPasswordModal);
+        document.getElementById('setTagPasswordConfirmBtn')?.addEventListener('click', confirmSetTagPassword);
+        document.getElementById('setTagPasswordInput')?.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') document.getElementById('setTagPasswordConfirm').focus();
+        });
+        document.getElementById('setTagPasswordConfirm')?.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') confirmSetTagPassword();
+        });
+        setModal.addEventListener('click', function(e) {
+            if (e.target === setModal) closeSetTagPasswordModal();
+        });
+    }
+    const managerModal = document.getElementById('tagPasswordManagerModal');
+    if (managerModal) {
+        document.getElementById('tagPasswordManagerCloseBtn')?.addEventListener('click', closeTagPasswordManager);
+        document.getElementById('tagPasswordManagerCloseBtn2')?.addEventListener('click', closeTagPasswordManager);
+        managerModal.addEventListener('click', function(e) {
+            if (e.target === managerModal) closeTagPasswordManager();
+        });
+    }
+});
