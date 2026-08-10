@@ -206,8 +206,12 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
     if (cardHTML && wrap) {
         // 🔥 直接把卡片 HTML 插入，用户瞬间看到内容
         wrap.innerHTML = cardHTML;
-
-       
+        
+        // 🔥 只重置事件标记，不绑定事件（让 renderList 统一管理）
+        wrap._clickBound = false;
+        wrap._contextMenuBound = false;
+        // 🔥 注意：不在这里绑定事件！只恢复内容
+        
         // 恢复滚动位置
         restoreScrollPosition();
         if (statusEl) statusEl.textContent = '● 缓存模式 ⚡';
@@ -305,16 +309,9 @@ function rebindTagEvents() {
         
         newItem.onclick = function() {
             if (isTagSortMode) return;
-            // 🔥 检查标签是否有密码
-            const tagName = this.dataset.tag;
-            const passwordHash = getTagPasswordHash(tagName);
-            if (passwordHash && !isTagUnlocked(tagName)) {
-                showTagPasswordModal(tagName, passwordHash);
-                return;
-            }
             document.querySelectorAll('.tag-item').forEach(t => t.classList.remove('active'));
             this.classList.add('active');
-            activeTag = tagName;
+            activeTag = this.dataset.tag;
             saveActiveTag(activeTag);
             renderList();
             if (isMobileDevice()) {
@@ -392,35 +389,25 @@ function renderTagsFilter() {
     tagsList.appendChild(allTag);
 
     allTags.forEach(tag => {
-    const item = document.createElement('div');
-    item.className = `tag-item ${activeTag === tag ? 'active' : ''}`;
-    // 🔥 显示锁图标
-    const passwordHash = getTagPasswordHash(tag);
-    const lockIcon = passwordHash ? '🔒 ' : '';
-    item.innerText = lockIcon + tag;
-    item.dataset.tag = tag;
-    item.dataset.sortable = 'true';
-    // 🔥 使用 async 函数处理密码验证
-    item.onclick = async function() {
-        if (isTagSortMode) return;
-        const tagName = this.dataset.tag;
-        const passwordHash = getTagPasswordHash(tagName);
-        if (passwordHash && !isTagUnlocked(tagName)) {
-            showTagPasswordModal(tagName, passwordHash);
-            return;
-        }
-        document.querySelectorAll('.tag-item').forEach(t => t.classList.remove('active'));
-        this.classList.add('active');
-        activeTag = tagName;
-        saveActiveTag(tagName);
-        renderList();
-        if (isMobileDevice()) {
-            const wrap = document.getElementById('tagsFilterWrap');
-            if (wrap) wrap.classList.remove('expanded');
-        }
-    };
-    tagsList.appendChild(item);
-});
+        const item = document.createElement('div');
+        item.className = `tag-item ${activeTag === tag ? 'active' : ''}`;
+        item.innerText = tag;
+        item.dataset.tag = tag;
+        item.dataset.sortable = 'true';
+        item.onclick = () => {
+            if (isTagSortMode) return;
+            document.querySelectorAll('.tag-item').forEach(t => t.classList.remove('active'));
+            item.classList.add('active');
+            activeTag = tag;
+            saveActiveTag(tag);
+            renderList();
+            if (isMobileDevice()) {
+                const wrap = document.getElementById('tagsFilterWrap');
+                if (wrap) wrap.classList.remove('expanded');
+            }
+        };
+        tagsList.appendChild(item);
+    });
 
     const sortBtn = document.createElement('div');
     sortBtn.className = 'tag-sort-toggle';
@@ -535,26 +522,6 @@ function getFilteredList() {
     const keyword = searchInput ? searchInput.value.trim().toLowerCase() : '';
     let list = [...siteList];
     
-    // 🔥 先过滤掉加密标签中未解锁的网站
-    const passwords = loadTagPasswords();
-    const encryptedTags = Object.keys(passwords).filter(tag => passwords[tag] && passwords[tag] !== '');
-    
-    if (encryptedTags.length > 0) {
-        list = list.filter(site => {
-            // 如果网站没有标签，保留
-            if (!site.tags || !Array.isArray(site.tags) || site.tags.length === 0) {
-                return true;
-            }
-            // 检查网站的所有标签中，是否有加密且未解锁的
-            const hasEncryptedLocked = site.tags.some(tag => {
-                return encryptedTags.includes(tag) && !isTagUnlocked(tag);
-            });
-            // 如果有加密且未解锁的标签，过滤掉
-            return !hasEncryptedLocked;
-        });
-    }
-    
-    // 🔥 标签只用于浏览，搜索时忽略（但已经过滤了加密的）
     if (!keyword && activeTag !== 'all') {
         list = list.filter(s => s.tags && Array.isArray(s.tags) && s.tags.includes(activeTag));
     }
@@ -601,43 +568,42 @@ function renderList() {
         return;
     }
 
-// ===== 🔥 先检查是否需要重建，还是只需要绑定事件 =====
-const existingItems = wrap.querySelectorAll('.site-item');
-const existingCount = existingItems.length;
-const newCount = filtered.length;
+    // ===== 🔥 先检查是否需要重建，还是只需要绑定事件 =====
+    const existingItems = wrap.querySelectorAll('.site-item');
+    const existingCount = existingItems.length;
+    const newCount = filtered.length;
 
-// 如果数量相同，尝试复用 DOM
-if (existingCount === newCount && existingCount > 0) {
-    let needRebuild = false;
-    existingItems.forEach((el, index) => {
-        const id = parseInt(el.dataset.id);
-        if (id !== filtered[index].id) {
-            needRebuild = true;
-        }
-    });
-    
-    if (!needRebuild) {
+    // 如果数量相同，尝试复用 DOM
+    if (existingCount === newCount && existingCount > 0) {
+        let needRebuild = false;
         existingItems.forEach((el, index) => {
-            updateItemContent(el, filtered[index]);
+            const id = parseInt(el.dataset.id);
+            if (id !== filtered[index].id) {
+                needRebuild = true;
+            }
         });
         
-        bindCardEvents(wrap);
-        
-        if (!isDragLocked) {
-            setTimeout(() => initSortableDrag(), 50);
+        if (!needRebuild) {
+            // 🔥 数据没变，只更新内容（测速、标签等）
+            existingItems.forEach((el, index) => {
+                updateItemContent(el, filtered[index]);
+            });
+            
+            // 🔥 确保事件已绑定（如果是卡片 HTML 缓存恢复后首次调用，需要绑定事件）
+            bindCardEvents(wrap);
+            
+            if (!isDragLocked) {
+                setTimeout(() => initSortableDrag(), 50);
+            }
+            isRendering = false;
+            return;
         }
-        isRendering = false;
-        return;
     }
-}
 
-// ===== 数量不同或数据变化 → 完全重建 =====
-wrap.innerHTML = '';
-// 删除下面两行（不再需要 _clickBound）
-// wrap._clickBound = false;
-// wrap._contextMenuBound = false;
-const frag = document.createDocumentFragment();
-const lazyItems = [];
+    // ===== 数量不同或数据变化 → 完全重建 =====
+    wrap.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    const lazyItems = [];
 
     filtered.forEach((site) => {
         const div = document.createElement('div');
@@ -754,66 +720,61 @@ const lazyItems = [];
 
     wrap.appendChild(frag);
 
-// ===== 🔥 保存卡片 HTML 到 localStorage（预渲染缓存） =====
-try {
-    const cardHTML = wrap.innerHTML;
-    localStorage.setItem('cardHTML', cardHTML);
-    localStorage.setItem('cardHTMLTime', String(Date.now()));
-} catch (e) {}
+    // ===== 🔥 保存卡片 HTML 到 localStorage（预渲染缓存） =====
+    try {
+        const cardHTML = wrap.innerHTML;
+        localStorage.setItem('cardHTML', cardHTML);
+        localStorage.setItem('cardHTMLTime', String(Date.now()));
+    } catch (e) {}
 
-// ===== 🔥 绑定卡片事件（统一入口） =====
-bindCardEvents(wrap);
+    // ===== 🔥 绑定卡片事件（统一入口） =====
+    bindCardEvents(wrap);
 
-setTimeout(() => {
-    if (!isDragLocked) initSortableDrag();
-    isRendering = false;
-    
-    if (lazyItems.length > 0) {
-        startLazyLoad(lazyItems);
-    }
-}, 50);
+    setTimeout(() => {
+        if (!isDragLocked) initSortableDrag();
+        isRendering = false;
+        
+        if (lazyItems.length > 0) {
+            startLazyLoad(lazyItems);
+        }
+    }, 50);
+}
 
 // ============================================================
-//  🔥 统一绑定卡片事件（使用 AbortController 防止重复）
+//  🔥 统一绑定卡片事件（防止重复）
 // ============================================================
-
-let cardEventController = null;
 
 function bindCardEvents(wrap) {
     if (!wrap) return;
     
-    // 🔥 如果有旧的 AbortController，取消所有旧监听器
-    if (cardEventController) {
-        cardEventController.abort();
-        cardEventController = null;
+    // 🔥 点击事件 - 只绑定一次
+    if (!wrap._clickBound) {
+        wrap.addEventListener('click', function(e) {
+            const item = e.target.closest('.site-item');
+            if (item) {
+                const url = item.dataset.url;
+                if (url) {
+                    window.open(url, '_blank');
+                }
+            }
+        });
+        wrap._clickBound = true;
     }
     
-    // 创建新的 AbortController
-    cardEventController = new AbortController();
-    const signal = cardEventController.signal;
-    
-    // 绑定点击事件
-    wrap.addEventListener('click', function(e) {
-        const item = e.target.closest('.site-item');
-        if (item) {
-            const url = item.dataset.url;
-            if (url) {
-                window.open(url, '_blank');
+    // 🔥 右键菜单事件 - 只绑定一次
+    if (!wrap._contextMenuBound) {
+        wrap.addEventListener('contextmenu', function(e) {
+            const div = e.target.closest('.site-item');
+            if (div) {
+                e.preventDefault();
+                e.stopPropagation();
+                const id = parseInt(div.dataset.id);
+                const url = div.dataset.url;
+                showContextMenu(e.clientX, e.clientY, id, url);
             }
-        }
-    }, { signal });
-    
-    // 绑定右键菜单事件
-    wrap.addEventListener('contextmenu', function(e) {
-        const div = e.target.closest('.site-item');
-        if (div) {
-            e.preventDefault();
-            e.stopPropagation();
-            const id = parseInt(div.dataset.id);
-            const url = div.dataset.url;
-            showContextMenu(e.clientX, e.clientY, id, url);
-        }
-    }, { signal });
+        });
+        wrap._contextMenuBound = true;
+    }
 }
 
 // ============================================================
@@ -2070,9 +2031,6 @@ if (adminModal) {
     var adminItem = document.getElementById('adminMenuItem');
     var logoutItem = document.getElementById('logoutMenuItem');
 
-    // 🔥 新增：标签密码管理入口
-    var tagPasswordMenuItem = document.getElementById('tagPasswordMenuItem');
-
     if (menuAdd) {
         menuAdd.addEventListener('click', function() {
             if (typeof openEditModal === 'function') {
@@ -2131,16 +2089,6 @@ if (adminModal) {
         adminItem.addEventListener('click', function() {
             if (typeof openAdminPanel === 'function') {
                 openAdminPanel();
-            }
-            dropdown.classList.remove('open');
-        });
-    }
-
-    // 🔥 标签密码管理入口事件
-    if (tagPasswordMenuItem) {
-        tagPasswordMenuItem.addEventListener('click', function() {
-            if (typeof openTagPasswordManager === 'function') {
-                openTagPasswordManager();
             }
             dropdown.classList.remove('open');
         });
@@ -2345,298 +2293,3 @@ function cleanupLazyLoad() {
     iconLoadQueue = [];
     isLoadingIcons = false;
 }
-
-// ============================================================
-//  🔐 标签密码管理
-// ============================================================
-
-// 默认密码配置
-const DEFAULT_TAG_PASSWORDS = {
-    "私密": "7c6a180b36896a0a8c02787eeafb0e4c1f6e2c5c6e3d4f8a9b0c1d2e3f4a5b6c7" // SHA-256("123456")
-};
-
-// 加载标签密码配置
-function loadTagPasswords() {
-    try {
-        const saved = localStorage.getItem('tagPasswords');
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            if (Object.keys(parsed).length > 0) {
-                return parsed;
-            }
-        }
-    } catch { }
-    saveTagPasswords(DEFAULT_TAG_PASSWORDS);
-    return { ...DEFAULT_TAG_PASSWORDS };
-}
-
-// 保存标签密码配置
-function saveTagPasswords(passwords) {
-    localStorage.setItem('tagPasswords', JSON.stringify(passwords));
-}
-
-// 获取标签密码哈希
-function getTagPasswordHash(tagName) {
-    const passwords = loadTagPasswords();
-    return passwords[tagName] || null;
-}
-
-// 设置标签密码（传入明文，自动哈希）
-async function setTagPassword(tagName, plainPassword) {
-    const passwords = loadTagPasswords();
-    if (plainPassword && plainPassword.trim() !== '') {
-        const hash = await sha256(plainPassword.trim());
-        passwords[tagName] = hash;
-    } else {
-        delete passwords[tagName];
-    }
-    saveTagPasswords(passwords);
-}
-
-// 检查标签是否已解锁（会话级）
-function isTagUnlocked(tagName) {
-    try {
-        const unlocked = JSON.parse(sessionStorage.getItem('unlockedTags') || '[]');
-        return unlocked.includes(tagName);
-    } catch { return false; }
-}
-
-// 标记标签为已解锁
-function markTagAsUnlocked(tagName) {
-    const unlocked = JSON.parse(sessionStorage.getItem('unlockedTags') || '[]');
-    if (!unlocked.includes(tagName)) {
-        unlocked.push(tagName);
-        sessionStorage.setItem('unlockedTags', JSON.stringify(unlocked));
-    }
-}
-
-// 清除标签解锁状态
-function clearUnlockedTags() {
-    sessionStorage.removeItem('unlockedTags');
-}
-
-// SHA-256 哈希函数
-async function sha256(message) {
-    const msgBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-// ============================================================
-//  标签密码弹窗
-// ============================================================
-
-let pendingTagName = null;
-let pendingTagHash = null;
-
-function showTagPasswordModal(tagName, passwordHash) {
-    pendingTagName = tagName;
-    pendingTagHash = passwordHash;
-    
-    document.getElementById('tagPasswordTitle').textContent = '🔒 请输入标签密码';
-    document.getElementById('tagPasswordLabel').textContent = `标签「${tagName}」需要密码才能访问`;
-    document.getElementById('tagPasswordInput').value = '';
-    document.getElementById('tagPasswordError').style.display = 'none';
-    document.getElementById('tagPasswordModal').classList.add('show');
-    setTimeout(() => {
-        document.getElementById('tagPasswordInput').focus();
-    }, 100);
-}
-
-function closeTagPasswordModal() {
-    document.getElementById('tagPasswordModal').classList.remove('show');
-    pendingTagName = null;
-    pendingTagHash = null;
-}
-
-async function confirmTagPassword() {
-    const input = document.getElementById('tagPasswordInput').value.trim();
-    if (!input) {
-        document.getElementById('tagPasswordError').textContent = '请输入密码';
-        document.getElementById('tagPasswordError').style.display = 'block';
-        return;
-    }
-    
-    const inputHash = await sha256(input);
-    
-    if (inputHash === pendingTagHash) {
-        markTagAsUnlocked(pendingTagName);
-        closeTagPasswordModal();
-        showToast(`✅ 标签「${pendingTagName}」已解锁`);
-        
-        const tagItems = document.querySelectorAll('.tag-item');
-        tagItems.forEach(item => {
-            item.classList.remove('active');
-            if (item.dataset.tag === pendingTagName) {
-                item.classList.add('active');
-            }
-        });
-        activeTag = pendingTagName;
-        saveActiveTag(pendingTagName);
-        renderList();
-        if (isMobileDevice()) {
-            const wrap = document.getElementById('tagsFilterWrap');
-            if (wrap) wrap.classList.remove('expanded');
-        }
-    } else {
-        document.getElementById('tagPasswordError').textContent = '❌ 密码错误，请重试';
-        document.getElementById('tagPasswordError').style.display = 'block';
-        document.getElementById('tagPasswordInput').value = '';
-        document.getElementById('tagPasswordInput').focus();
-    }
-}
-
-// 绑定密码弹窗事件
-document.addEventListener('DOMContentLoaded', function() {
-    const modal = document.getElementById('tagPasswordModal');
-    if (modal) {
-        document.getElementById('tagPasswordCloseBtn').addEventListener('click', closeTagPasswordModal);
-        document.getElementById('tagPasswordCancelBtn').addEventListener('click', closeTagPasswordModal);
-        document.getElementById('tagPasswordConfirmBtn').addEventListener('click', confirmTagPassword);
-        document.getElementById('tagPasswordInput').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') confirmTagPassword();
-        });
-        modal.addEventListener('click', function(e) {
-            if (e.target === modal) closeTagPasswordModal();
-        });
-    }
-});
-
-// ============================================================
-//  标签密码管理界面
-// ============================================================
-
-function openTagPasswordManager() {
-    const modal = document.getElementById('tagPasswordManagerModal');
-    if (!modal) return;
-    modal.classList.add('show');
-    renderTagPasswordManagerList();
-}
-
-function closeTagPasswordManager() {
-    document.getElementById('tagPasswordManagerModal').classList.remove('show');
-}
-
-function renderTagPasswordManagerList() {
-    const list = document.getElementById('tagPasswordManagerList');
-    if (!list) return;
-    
-    const allTags = getAllTags();
-    const passwords = loadTagPasswords();
-    
-    if (allTags.length === 0) {
-        list.innerHTML = '<div style="padding:20px;text-align:center;color:#6b7280;">暂无标签</div>';
-        return;
-    }
-    
-    let html = '';
-    allTags.forEach(tag => {
-        const hasPassword = passwords[tag] && passwords[tag] !== '';
-        html += `
-            <div class="tag-password-item" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f0f0f0;gap:10px;">
-                <span style="font-weight:500;font-size:14px;min-width:80px;">${tag}</span>
-                <span style="font-size:13px;color:#6b7280;flex:1;">${hasPassword ? '🔒 已加密' : '🔓 未加密'}</span>
-                <button class="tag-password-set-btn" data-tag="${tag}" style="padding:4px 14px;border:1px solid #e8f8f0;border-radius:6px;background:#f9fbfc;cursor:pointer;font-size:13px;color:#4b5563;">${hasPassword ? '修改' : '设置'}</button>
-                ${hasPassword ? `<button class="tag-password-remove-btn" data-tag="${tag}" style="padding:4px 10px;border:1px solid #fef2f2;border-radius:6px;background:#fef2f2;cursor:pointer;font-size:13px;color:#ef4444;">移除</button>` : ''}
-            </div>
-        `;
-    });
-    list.innerHTML = html;
-    
-    list.querySelectorAll('.tag-password-set-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const tag = this.dataset.tag;
-            showSetTagPasswordModal(tag);
-        });
-    });
-    list.querySelectorAll('.tag-password-remove-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const tag = this.dataset.tag;
-            if (confirm(`确定要移除标签「${tag}」的密码吗？`)) {
-                setTagPassword(tag, '');
-                renderTagPasswordManagerList();
-                showToast(`✅ 已移除标签「${tag}」的密码`);
-            }
-        });
-    });
-}
-
-// ============================================================
-//  设置标签密码弹窗
-// ============================================================
-
-let settingTagName = null;
-
-function showSetTagPasswordModal(tagName) {
-    settingTagName = tagName;
-    document.getElementById('setTagPasswordTitle').textContent = `设置「${tagName}」的密码`;
-    document.getElementById('setTagPasswordInput').value = '';
-    document.getElementById('setTagPasswordConfirm').value = '';
-    document.getElementById('setTagPasswordError').style.display = 'none';
-    document.getElementById('setTagPasswordModal').classList.add('show');
-    setTimeout(() => {
-        document.getElementById('setTagPasswordInput').focus();
-    }, 100);
-}
-
-function closeSetTagPasswordModal() {
-    document.getElementById('setTagPasswordModal').classList.remove('show');
-    settingTagName = null;
-}
-
-async function confirmSetTagPassword() {
-    const input = document.getElementById('setTagPasswordInput').value;
-    const confirm = document.getElementById('setTagPasswordConfirm').value;
-    const errorEl = document.getElementById('setTagPasswordError');
-    
-    if (!input || input.length < 4) {
-        errorEl.textContent = '密码至少 4 位';
-        errorEl.style.display = 'block';
-        return;
-    }
-    if (input !== confirm) {
-        errorEl.textContent = '两次输入的密码不一致';
-        errorEl.style.display = 'block';
-        return;
-    }
-    
-    await setTagPassword(settingTagName, input);
-    closeSetTagPasswordModal();
-    renderTagPasswordManagerList();
-    showToast(`✅ 已为标签「${settingTagName}」设置密码`);
-}
-
-// ============================================================
-//  绑定设置密码弹窗事件（放在 DOMContentLoaded 之外确保执行）
-// ============================================================
-
-// 用独立的事件绑定，不依赖 DOMContentLoaded
-document.addEventListener('DOMContentLoaded', function() {
-    // 设置密码弹窗
-    const setModal = document.getElementById('setTagPasswordModal');
-    if (setModal) {
-        document.getElementById('setTagPasswordCloseBtn')?.addEventListener('click', closeSetTagPasswordModal);
-        document.getElementById('setTagPasswordCancelBtn')?.addEventListener('click', closeSetTagPasswordModal);
-        document.getElementById('setTagPasswordConfirmBtn')?.addEventListener('click', confirmSetTagPassword);
-        document.getElementById('setTagPasswordInput')?.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') document.getElementById('setTagPasswordConfirm').focus();
-        });
-        document.getElementById('setTagPasswordConfirm')?.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') confirmSetTagPassword();
-        });
-        setModal.addEventListener('click', function(e) {
-            if (e.target === setModal) closeSetTagPasswordModal();
-        });
-    }
-    
-    // 标签密码管理弹窗
-    const managerModal = document.getElementById('tagPasswordManagerModal');
-    if (managerModal) {
-        document.getElementById('tagPasswordManagerCloseBtn')?.addEventListener('click', closeTagPasswordManager);
-        document.getElementById('tagPasswordManagerCloseBtn2')?.addEventListener('click', closeTagPasswordManager);
-        managerModal.addEventListener('click', function(e) {
-            if (e.target === managerModal) closeTagPasswordManager();
-        });
-    }
-});
