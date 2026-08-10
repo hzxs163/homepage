@@ -621,23 +621,19 @@ function renderList() {
                 }
             });
             
-            if (!needRebuild) {
-                // 🔥 数据没变，只更新内容（测速、标签等）
-                existingItems.forEach((el, index) => {
-                    updateItemContent(el, filtered[index]);
-                });
-                
-                // 🔥 先重置事件标记，再绑定（防止叠加）
-                wrap._clickBound = false;
-                wrap._contextMenuBound = false;
-                bindCardEvents(wrap);
-                
-                if (!isDragLocked) {
-                    setTimeout(() => initSortableDrag(), 50);
-                }
-                isRendering = false;
-                return;
+        if (!needRebuild) {
+            existingItems.forEach((el, index) => {
+                updateItemContent(el, filtered[index]);
+            });
+            
+            // 🔥 直接绑定（AbortController 内部自动处理旧监听器移除）
+            bindCardEvents(wrap);
+            
+            if (!isDragLocked) {
+                setTimeout(() => initSortableDrag(), 50);
             }
+            isRendering = false;
+            return;
         }
 
     // ===== 数量不同或数据变化 → 完全重建 =====
@@ -763,64 +759,69 @@ function renderList() {
 
     wrap.appendChild(frag);
 
-    // ===== 🔥 保存卡片 HTML 到 localStorage（预渲染缓存） =====
-    try {
-        const cardHTML = wrap.innerHTML;
-        localStorage.setItem('cardHTML', cardHTML);
-        localStorage.setItem('cardHTMLTime', String(Date.now()));
-    } catch (e) {}
+// ===== 🔥 保存卡片 HTML 到 localStorage（预渲染缓存） =====
+try {
+    const cardHTML = wrap.innerHTML;
+    localStorage.setItem('cardHTML', cardHTML);
+    localStorage.setItem('cardHTMLTime', String(Date.now()));
+} catch (e) {}
 
-    // ===== 🔥 绑定卡片事件（统一入口） =====
-    // 先重置事件标记，再绑定（防止叠加）
-    wrap._clickBound = false;
-    wrap._contextMenuBound = false;
-    bindCardEvents(wrap);
+// ===== 🔥 绑定卡片事件（统一入口） =====
+bindCardEvents(wrap);
 
-    setTimeout(() => {
-        if (!isDragLocked) initSortableDrag();
-        isRendering = false;
-        
-        if (lazyItems.length > 0) {
-            startLazyLoad(lazyItems);
-        }
-    }, 50);
-}
+setTimeout(() => {
+    if (!isDragLocked) initSortableDrag();
+    isRendering = false;
+    
+    if (lazyItems.length > 0) {
+        startLazyLoad(lazyItems);
+    }
+}, 50);
 
 // ============================================================
 //  🔥 统一绑定卡片事件（防止重复）
 // ============================================================
+// ============================================================
+//  🔥 统一绑定卡片事件（使用 AbortController 防止重复）
+// ============================================================
+
+let cardEventController = null;
 
 function bindCardEvents(wrap) {
     if (!wrap) return;
     
-    // 🔥 点击事件 - 只绑定一次
-    if (!wrap._clickBound) {
-        wrap.addEventListener('click', function(e) {
-            const item = e.target.closest('.site-item');
-            if (item) {
-                const url = item.dataset.url;
-                if (url) {
-                    window.open(url, '_blank');
-                }
-            }
-        });
-        wrap._clickBound = true;
+    // 🔥 如果有旧的 AbortController，取消所有旧监听器
+    if (cardEventController) {
+        cardEventController.abort();
+        cardEventController = null;
     }
     
-    // 🔥 右键菜单事件 - 只绑定一次
-    if (!wrap._contextMenuBound) {
-        wrap.addEventListener('contextmenu', function(e) {
-            const div = e.target.closest('.site-item');
-            if (div) {
-                e.preventDefault();
-                e.stopPropagation();
-                const id = parseInt(div.dataset.id);
-                const url = div.dataset.url;
-                showContextMenu(e.clientX, e.clientY, id, url);
+    // 创建新的 AbortController
+    cardEventController = new AbortController();
+    const signal = cardEventController.signal;
+    
+    // 绑定点击事件
+    wrap.addEventListener('click', function(e) {
+        const item = e.target.closest('.site-item');
+        if (item) {
+            const url = item.dataset.url;
+            if (url) {
+                window.open(url, '_blank');
             }
-        });
-        wrap._contextMenuBound = true;
-    }
+        }
+    }, { signal });
+    
+    // 绑定右键菜单事件
+    wrap.addEventListener('contextmenu', function(e) {
+        const div = e.target.closest('.site-item');
+        if (div) {
+            e.preventDefault();
+            e.stopPropagation();
+            const id = parseInt(div.dataset.id);
+            const url = div.dataset.url;
+            showContextMenu(e.clientX, e.clientY, id, url);
+        }
+    }, { signal });
 }
 
 // ============================================================
