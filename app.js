@@ -396,32 +396,35 @@ function renderTagsFilter() {
     tagsList.appendChild(allTag);
 
     allTags.forEach(tag => {
-        const item = document.createElement('div');
-        item.className = `tag-item ${activeTag === tag ? 'active' : ''}`;
-        item.innerText = tag;
-        item.dataset.tag = tag;
-        item.dataset.sortable = 'true';
-        // 🔥 使用 async 函数处理密码验证
-        item.onclick = async function() {
-            if (isTagSortMode) return;
-            const tagName = this.dataset.tag;
-            const passwordHash = getTagPasswordHash(tagName);
-            if (passwordHash && !isTagUnlocked(tagName)) {
-                showTagPasswordModal(tagName, passwordHash);
-                return;
-            }
-            document.querySelectorAll('.tag-item').forEach(t => t.classList.remove('active'));
-            this.classList.add('active');
-            activeTag = tagName;
-            saveActiveTag(tagName);
-            renderList();
-            if (isMobileDevice()) {
-                const wrap = document.getElementById('tagsFilterWrap');
-                if (wrap) wrap.classList.remove('expanded');
-            }
-        };
-        tagsList.appendChild(item);
-    });
+    const item = document.createElement('div');
+    item.className = `tag-item ${activeTag === tag ? 'active' : ''}`;
+    // 🔥 显示锁图标
+    const passwordHash = getTagPasswordHash(tag);
+    const lockIcon = passwordHash ? '🔒 ' : '';
+    item.innerText = lockIcon + tag;
+    item.dataset.tag = tag;
+    item.dataset.sortable = 'true';
+    // 🔥 使用 async 函数处理密码验证
+    item.onclick = async function() {
+        if (isTagSortMode) return;
+        const tagName = this.dataset.tag;
+        const passwordHash = getTagPasswordHash(tagName);
+        if (passwordHash && !isTagUnlocked(tagName)) {
+            showTagPasswordModal(tagName, passwordHash);
+            return;
+        }
+        document.querySelectorAll('.tag-item').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+        activeTag = tagName;
+        saveActiveTag(tagName);
+        renderList();
+        if (isMobileDevice()) {
+            const wrap = document.getElementById('tagsFilterWrap');
+            if (wrap) wrap.classList.remove('expanded');
+        }
+    };
+    tagsList.appendChild(item);
+});
 
     const sortBtn = document.createElement('div');
     sortBtn.className = 'tag-sort-toggle';
@@ -536,6 +539,26 @@ function getFilteredList() {
     const keyword = searchInput ? searchInput.value.trim().toLowerCase() : '';
     let list = [...siteList];
     
+    // 🔥 先过滤掉加密标签中未解锁的网站
+    const passwords = loadTagPasswords();
+    const encryptedTags = Object.keys(passwords).filter(tag => passwords[tag] && passwords[tag] !== '');
+    
+    if (encryptedTags.length > 0) {
+        list = list.filter(site => {
+            // 如果网站没有标签，保留
+            if (!site.tags || !Array.isArray(site.tags) || site.tags.length === 0) {
+                return true;
+            }
+            // 检查网站的所有标签中，是否有加密且未解锁的
+            const hasEncryptedLocked = site.tags.some(tag => {
+                return encryptedTags.includes(tag) && !isTagUnlocked(tag);
+            });
+            // 如果有加密且未解锁的标签，过滤掉
+            return !hasEncryptedLocked;
+        });
+    }
+    
+    // 🔥 标签只用于浏览，搜索时忽略（但已经过滤了加密的）
     if (!keyword && activeTag !== 'all') {
         list = list.filter(s => s.tags && Array.isArray(s.tags) && s.tags.includes(activeTag));
     }
