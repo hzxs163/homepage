@@ -206,12 +206,8 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
     if (cardHTML && wrap) {
         // 🔥 直接把卡片 HTML 插入，用户瞬间看到内容
         wrap.innerHTML = cardHTML;
-        
-        // 🔥 只重置事件标记，不绑定事件（让 renderList 统一管理）
-        wrap._clickBound = false;
-        wrap._contextMenuBound = false;
-        // 🔥 注意：不在这里绑定事件！只恢复内容
-        
+
+       
         // 恢复滚动位置
         restoreScrollPosition();
         if (statusEl) statusEl.textContent = '● 缓存模式 ⚡';
@@ -605,44 +601,43 @@ function renderList() {
         return;
     }
 
-    // ===== 🔥 先检查是否需要重建，还是只需要绑定事件 =====
-    const existingItems = wrap.querySelectorAll('.site-item');
-    const existingCount = existingItems.length;
-    const newCount = filtered.length;
+// ===== 🔥 先检查是否需要重建，还是只需要绑定事件 =====
+const existingItems = wrap.querySelectorAll('.site-item');
+const existingCount = existingItems.length;
+const newCount = filtered.length;
 
-    // 如果数量相同，尝试复用 DOM
-    // 如果数量相同，尝试复用 DOM
-        if (existingCount === newCount && existingCount > 0) {
-            let needRebuild = false;
-            existingItems.forEach((el, index) => {
-                const id = parseInt(el.dataset.id);
-                if (id !== filtered[index].id) {
-                    needRebuild = true;
-                }
-            });
-            
-        if (!needRebuild) {
-            existingItems.forEach((el, index) => {
-                updateItemContent(el, filtered[index]);
-            });
-            
-            // 🔥 直接绑定（AbortController 内部自动处理旧监听器移除）
-            bindCardEvents(wrap);
-            
-            if (!isDragLocked) {
-                setTimeout(() => initSortableDrag(), 50);
-            }
-            isRendering = false;
-            return;
+// 如果数量相同，尝试复用 DOM
+if (existingCount === newCount && existingCount > 0) {
+    let needRebuild = false;
+    existingItems.forEach((el, index) => {
+        const id = parseInt(el.dataset.id);
+        if (id !== filtered[index].id) {
+            needRebuild = true;
         }
+    });
+    
+    if (!needRebuild) {
+        existingItems.forEach((el, index) => {
+            updateItemContent(el, filtered[index]);
+        });
+        
+        bindCardEvents(wrap);
+        
+        if (!isDragLocked) {
+            setTimeout(() => initSortableDrag(), 50);
+        }
+        isRendering = false;
+        return;
+    }
+}
 
-    // ===== 数量不同或数据变化 → 完全重建 =====
-    wrap.innerHTML = '';
-    // 🔥 重置事件绑定标记，让 bindCardEvents 重新绑定
-    wrap._clickBound = false;
-    wrap._contextMenuBound = false;
-    const frag = document.createDocumentFragment();
-    const lazyItems = [];
+// ===== 数量不同或数据变化 → 完全重建 =====
+wrap.innerHTML = '';
+// 删除下面两行（不再需要 _clickBound）
+// wrap._clickBound = false;
+// wrap._contextMenuBound = false;
+const frag = document.createDocumentFragment();
+const lazyItems = [];
 
     filtered.forEach((site) => {
         const div = document.createElement('div');
@@ -778,9 +773,6 @@ setTimeout(() => {
     }
 }, 50);
 
-// ============================================================
-//  🔥 统一绑定卡片事件（防止重复）
-// ============================================================
 // ============================================================
 //  🔥 统一绑定卡片事件（使用 AbortController 防止重复）
 // ============================================================
