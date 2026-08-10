@@ -611,31 +611,34 @@ function renderList() {
     const newCount = filtered.length;
 
     // 如果数量相同，尝试复用 DOM
-    if (existingCount === newCount && existingCount > 0) {
-        let needRebuild = false;
-        existingItems.forEach((el, index) => {
-            const id = parseInt(el.dataset.id);
-            if (id !== filtered[index].id) {
-                needRebuild = true;
-            }
-        });
-        
-        if (!needRebuild) {
-            // 🔥 数据没变，只更新内容（测速、标签等）
+    // 如果数量相同，尝试复用 DOM
+        if (existingCount === newCount && existingCount > 0) {
+            let needRebuild = false;
             existingItems.forEach((el, index) => {
-                updateItemContent(el, filtered[index]);
+                const id = parseInt(el.dataset.id);
+                if (id !== filtered[index].id) {
+                    needRebuild = true;
+                }
             });
             
-            // 🔥 确保事件已绑定（如果是卡片 HTML 缓存恢复后首次调用，需要绑定事件）
-            bindCardEvents(wrap);
-            
-            if (!isDragLocked) {
-                setTimeout(() => initSortableDrag(), 50);
+            if (!needRebuild) {
+                // 🔥 数据没变，只更新内容（测速、标签等）
+                existingItems.forEach((el, index) => {
+                    updateItemContent(el, filtered[index]);
+                });
+                
+                // 🔥 先重置事件标记，再绑定（防止叠加）
+                wrap._clickBound = false;
+                wrap._contextMenuBound = false;
+                bindCardEvents(wrap);
+                
+                if (!isDragLocked) {
+                    setTimeout(() => initSortableDrag(), 50);
+                }
+                isRendering = false;
+                return;
             }
-            isRendering = false;
-            return;
         }
-    }
 
     // ===== 数量不同或数据变化 → 完全重建 =====
     wrap.innerHTML = '';
@@ -768,6 +771,9 @@ function renderList() {
     } catch (e) {}
 
     // ===== 🔥 绑定卡片事件（统一入口） =====
+    // 先重置事件标记，再绑定（防止叠加）
+    wrap._clickBound = false;
+    wrap._contextMenuBound = false;
     bindCardEvents(wrap);
 
     setTimeout(() => {
