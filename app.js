@@ -2,6 +2,50 @@
 //  主应用逻辑
 // ============================================================
 
+// ============================================================
+//  目录
+// ============================================================
+//  1. 全局变量
+//  2. 工具函数
+//  3. 标签排序存储
+//  4. 记住上次选中的标签
+//  5. 记住滚动位置
+//  6. 骨架屏
+//  7. 主题
+//  8. 数据加载 - 秒开策略
+//  9. 重新绑定标签事件
+//  10. 渲染 - 标签相关
+//  11. 标签拖拽排序
+//  12. 获取筛选列表
+//  13. 渲染 - 卡片列表 (增量更新)
+//  14. 绑定卡片事件
+//  15. 更新单个卡片内容
+//  16. 右键菜单
+//  17. 搜索
+//  18. 拖拽
+//  19. 弹窗（添加/编辑）
+//  20. 标签相关（含展开/收起）
+//  21. 保存 / 删除
+//  22. 剪贴板
+//  23. 测速
+//  24. 导入 / 导出
+//  25. 标签栏折叠（移动端）
+//  26. 返回顶部
+//  27. 键盘快捷键
+//  28. 排序切换
+//  29. 初始化
+//  30. 管理员功能
+//  31. 事件绑定
+//  32. 用户下拉菜单
+//  33. 页面加载后自动登录
+//  34. 懒加载图标
+//  35. 标签密码管理
+// ============================================================
+
+// ============================================================
+//  1. 全局变量
+// ============================================================
+
 const TOAST_DURATION = 2000;
 const REQUEST_TIMEOUT = 3000;
 const SCROLL_THRESHOLD = 300;
@@ -25,7 +69,7 @@ let tagSortableInstance = null;
 let isLoading = true;
 
 // ============================================================
-//  工具函数
+//  2. 工具函数
 // ============================================================
 
 function showToast(text, duration = TOAST_DURATION) {
@@ -48,7 +92,6 @@ function getFileName() {
     return `站点备份-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.json`;
 }
 
-// ===== 图标获取函数（首字母占位 + localStorage缓存） =====
 function getSiteLogoSync(site) {
     if (!site) {
         return 'https://ui-avatars.com/api/?name=🔗&background=00b866&color=fff&size=48';
@@ -68,7 +111,7 @@ function isMobileDevice() {
 }
 
 // ============================================================
-//  标签排序存储
+//  3. 标签排序存储
 // ============================================================
 
 function loadTagSortOrder() {
@@ -89,7 +132,7 @@ function saveTagSortOrder() {
 }
 
 // ============================================================
-//  记住上次选中的标签
+//  4. 记住上次选中的标签
 // ============================================================
 
 function loadActiveTag() {
@@ -110,7 +153,7 @@ function saveActiveTag(tag) {
 }
 
 // ============================================================
-//  记住滚动位置
+//  5. 记住滚动位置
 // ============================================================
 
 function saveScrollPosition() {
@@ -130,7 +173,7 @@ function restoreScrollPosition() {
 }
 
 // ============================================================
-//  骨架屏
+//  6. 骨架屏
 // ============================================================
 
 function showSkeleton() {
@@ -172,7 +215,7 @@ function hideSkeleton() {
 }
 
 // ============================================================
-//  主题
+//  7. 主题
 // ============================================================
 
 function initTheme() {
@@ -192,7 +235,7 @@ function toggleTheme() {
 }
 
 // ============================================================
-//  优化版数据加载 - 秒开策略 + 卡片HTML缓存 + 标签缓存
+//  8. 数据加载 - 秒开策略
 // ============================================================
 
 async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
@@ -201,30 +244,21 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
     const wrap = document.getElementById('siteListWrap');
     const tagsList = document.getElementById('tagsList');
     
-    // ===== 第一步：秒开 - 恢复卡片 HTML 缓存 =====
     const cardHTML = localStorage.getItem('cardHTML');
     if (cardHTML && wrap) {
-        // 🔥 直接把卡片 HTML 插入，用户瞬间看到内容
         wrap.innerHTML = cardHTML;
-        
-        // 🔥 只重置事件标记，不绑定事件（让 renderList 统一管理）
         wrap._clickBound = false;
         wrap._contextMenuBound = false;
-        // 🔥 注意：不在这里绑定事件！只恢复内容
-        
-        // 恢复滚动位置
         restoreScrollPosition();
         if (statusEl) statusEl.textContent = '● 缓存模式 ⚡';
     }
     
-    // ===== 🔥 秒开 - 恢复标签 HTML 缓存 =====
     const tagsHTML = localStorage.getItem('tagsHTML');
     if (tagsHTML && tagsList) {
         tagsList.innerHTML = tagsHTML;
         rebindTagEvents();
     }
     
-    // ===== 第二步：读取数据缓存 =====
     const cached = localStorage.getItem('siteList');
     if (cached) {
         try {
@@ -242,7 +276,6 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
         } catch { }
     }
     
-    // 没有缓存才显示骨架屏
     if (!hasCache && !cardHTML) {
         showSkeleton();
         if (statusEl) statusEl.textContent = '● 加载中...';
@@ -250,7 +283,6 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
         if (statusEl && !cardHTML) statusEl.textContent = '● 更新中...';
     }
     
-    // ===== 第三步：后台静默请求最新数据 =====
     try {
         const data = await API.getLinks(sortBy, order);
         
@@ -296,7 +328,7 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
 }
 
 // ============================================================
-//  重新绑定标签事件
+//  9. 重新绑定标签事件
 // ============================================================
 
 function rebindTagEvents() {
@@ -329,7 +361,7 @@ function rebindTagEvents() {
 }
 
 // ============================================================
-//  渲染
+//  10. 渲染 - 标签相关
 // ============================================================
 
 function getAllTags() {
@@ -461,7 +493,7 @@ function renderTagsFilter() {
 }
 
 // ============================================================
-//  标签拖拽排序
+//  11. 标签拖拽排序
 // ============================================================
 
 function toggleTagSortMode() {
@@ -525,6 +557,10 @@ function initTagSortable() {
     });
 }
 
+// ============================================================
+//  12. 获取筛选列表
+// ============================================================
+
 function getFilteredList() {
     if (!Array.isArray(siteList)) {
         console.error('siteList 不是数组，重新初始化');
@@ -536,7 +572,6 @@ function getFilteredList() {
     const keyword = searchInput ? searchInput.value.trim().toLowerCase() : '';
     let list = [...siteList];
     
-    // 过滤加密标签中未解锁的网站
     const passwords = loadTagPasswords();
     const encryptedTags = Object.keys(passwords).filter(t => passwords[t] && passwords[t] !== '');
     if (encryptedTags.length > 0) {
@@ -562,7 +597,7 @@ function getFilteredList() {
 }
 
 // ============================================================
-//  🔥 增量更新渲染 - 减少 DOM 重建
+//  13. 渲染 - 卡片列表 (增量更新)
 // ============================================================
 
 function renderList() {
@@ -593,12 +628,10 @@ function renderList() {
         return;
     }
 
-    // ===== 🔥 先检查是否需要重建，还是只需要绑定事件 =====
     const existingItems = wrap.querySelectorAll('.site-item');
     const existingCount = existingItems.length;
     const newCount = filtered.length;
 
-    // 如果数量相同，尝试复用 DOM
     if (existingCount === newCount && existingCount > 0) {
         let needRebuild = false;
         existingItems.forEach((el, index) => {
@@ -609,12 +642,10 @@ function renderList() {
         });
         
         if (!needRebuild) {
-            // 🔥 数据没变，只更新内容（测速、标签等）
             existingItems.forEach((el, index) => {
                 updateItemContent(el, filtered[index]);
             });
             
-            // 🔥 确保事件已绑定（如果是卡片 HTML 缓存恢复后首次调用，需要绑定事件）
             bindCardEvents(wrap);
             
             if (!isDragLocked) {
@@ -625,7 +656,6 @@ function renderList() {
         }
     }
 
-    // ===== 数量不同或数据变化 → 完全重建 =====
     wrap.innerHTML = '';
     const frag = document.createDocumentFragment();
     const lazyItems = [];
@@ -745,14 +775,12 @@ function renderList() {
 
     wrap.appendChild(frag);
 
-    // ===== 🔥 保存卡片 HTML 到 localStorage（预渲染缓存） =====
     try {
         const cardHTML = wrap.innerHTML;
         localStorage.setItem('cardHTML', cardHTML);
         localStorage.setItem('cardHTMLTime', String(Date.now()));
     } catch (e) {}
 
-    // ===== 🔥 绑定卡片事件（统一入口） =====
     bindCardEvents(wrap);
 
     setTimeout(() => {
@@ -766,13 +794,12 @@ function renderList() {
 }
 
 // ============================================================
-//  🔥 统一绑定卡片事件（防止重复）
+//  14. 绑定卡片事件
 // ============================================================
 
 function bindCardEvents(wrap) {
     if (!wrap) return;
     
-    // 🔥 点击事件 - 只绑定一次
     if (!wrap._clickBound) {
         wrap.addEventListener('click', function(e) {
             const item = e.target.closest('.site-item');
@@ -786,7 +813,6 @@ function bindCardEvents(wrap) {
         wrap._clickBound = true;
     }
     
-    // 🔥 右键菜单事件 - 只绑定一次
     if (!wrap._contextMenuBound) {
         wrap.addEventListener('contextmenu', function(e) {
             const div = e.target.closest('.site-item');
@@ -803,7 +829,7 @@ function bindCardEvents(wrap) {
 }
 
 // ============================================================
-//  🔥 更新单个卡片内容（增量更新用）
+//  15. 更新单个卡片内容
 // ============================================================
 
 function updateItemContent(el, site) {
@@ -857,7 +883,7 @@ function renderAll() {
 }
 
 // ============================================================
-//  右键菜单（移动端长按菜单）
+//  16. 右键菜单
 // ============================================================
 
 let contextMenuEl = null;
@@ -999,7 +1025,7 @@ async function deleteSiteById(id) {
 }
 
 // ============================================================
-//  搜索
+//  17. 搜索
 // ============================================================
 
 function handleSearch() {
@@ -1024,7 +1050,7 @@ function clearSearch() {
 }
 
 // ============================================================
-//  拖拽
+//  18. 拖拽
 // ============================================================
 
 function toggleDragLock() {
@@ -1095,7 +1121,7 @@ function initSortableDrag() {
 }
 
 // ============================================================
-//  弹窗（添加/编辑）
+//  19. 弹窗（添加/编辑）
 // ============================================================
 
 function openEditModal(id = null) {
@@ -1160,9 +1186,8 @@ function closeModal() {
     editingId = null;
 }
 
-
 // ============================================================
-//  标签相关（含展开/收起）
+//  20. 标签相关（含展开/收起）
 // ============================================================
 
 function renderExistingTags(filter = '') {
@@ -1361,7 +1386,7 @@ function syncInputToSelectedTags() {
 }
 
 // ============================================================
-//  保存 / 删除
+//  21. 保存 / 删除
 // ============================================================
 
 async function saveSite() {
@@ -1424,7 +1449,7 @@ async function deleteSite() {
 }
 
 // ============================================================
-//  剪贴板
+//  22. 剪贴板
 // ============================================================
 
 async function extractFromClipboard() {
@@ -1449,7 +1474,7 @@ async function extractFromClipboard() {
 }
 
 // ============================================================
-//  测速（使用 no-cors 模式 - 可测内网）
+//  23. 测速
 // ============================================================
 
 async function testLatency(url) {
@@ -1485,10 +1510,6 @@ async function testLatency(url) {
         return '超时';
     }
 }
-
-// ============================================================
-//  批量测速 - 使用 Web Worker（不阻塞主线程）
-// ============================================================
 
 let worker = null;
 
@@ -1581,7 +1602,7 @@ async function batchTestLatency() {
 }
 
 // ============================================================
-//  导入 / 导出
+//  24. 导入 / 导出
 // ============================================================
 
 function importJson() {
@@ -1684,7 +1705,7 @@ async function exportJson() {
 }
 
 // ============================================================
-//  标签栏折叠（移动端）
+//  25. 标签栏折叠（移动端）
 // ============================================================
 
 function initTagsFilter() {
@@ -1699,7 +1720,7 @@ function initTagsFilter() {
 }
 
 // ============================================================
-//  返回顶部
+//  26. 返回顶部
 // ============================================================
 
 function handleScroll() {
@@ -1718,7 +1739,7 @@ function backToTop() {
 }
 
 // ============================================================
-//  键盘快捷键
+//  27. 键盘快捷键
 // ============================================================
 
 function initKeyboardShortcuts() {
@@ -1750,7 +1771,7 @@ function initKeyboardShortcuts() {
 }
 
 // ============================================================
-//  排序切换
+//  28. 排序切换
 // ============================================================
 
 function initSortSelector() {
@@ -1770,7 +1791,7 @@ function initSortSelector() {
 }
 
 // ============================================================
-//  初始化
+//  29. 初始化
 // ============================================================
 
 function initApp() {
@@ -1821,7 +1842,7 @@ function saveLatencyCache() {
 }
 
 // ============================================================
-//  管理员功能
+//  30. 管理员功能
 // ============================================================
 
 function openAdminPanel() {
@@ -1901,7 +1922,7 @@ async function adminDeleteUser(username) {
 }
 
 // ============================================================
-//  事件绑定（在 DOM 加载后执行）
+//  31. 事件绑定
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -2029,7 +2050,7 @@ if (adminModal) {
 });
 
 // ============================================================
-//  用户下拉菜单（兼容 Edge）
+//  32. 用户下拉菜单
 // ============================================================
 
 (function() {
@@ -2056,7 +2077,6 @@ if (adminModal) {
     var adminItem = document.getElementById('adminMenuItem');
     var logoutItem = document.getElementById('logoutMenuItem');
 
-    // 🔥 新增：标签密码管理入口
     var tagPasswordMenuItem = document.getElementById('tagPasswordMenuItem');
 
     if (menuAdd) {
@@ -2122,7 +2142,6 @@ if (adminModal) {
         });
     }
 
-    // 🔥 标签密码管理入口事件
     if (tagPasswordMenuItem) {
         tagPasswordMenuItem.addEventListener('click', function() {
             if (typeof openTagPasswordManager === 'function') {
@@ -2159,7 +2178,7 @@ if (adminModal) {
 })();
 
 // ============================================================
-//  页面加载后自动登录（优化版 - 无闪烁）
+//  33. 页面加载后自动登录
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -2200,7 +2219,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ============================================================
-//  懒加载图标（滚动到才加载 + 每批5个 + localStorage缓存）
+//  34. 懒加载图标
 // ============================================================
 
 let lazyObserver = null;
@@ -2333,7 +2352,7 @@ function cleanupLazyLoad() {
 }
 
 // ============================================================
-//  🔐 标签密码管理
+//  35. 标签密码管理
 // ============================================================
 
 const DEFAULT_TAG_PASSWORDS = {
@@ -2397,10 +2416,6 @@ async function sha256(message) {
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
-
-// ============================================================
-//  标签密码弹窗
-// ============================================================
 
 let pendingTagName = null;
 let pendingTagHash = null;
@@ -2473,10 +2488,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// ============================================================
-//  标签密码管理界面
-// ============================================================
-
 function openTagPasswordManager() {
     const modal = document.getElementById('tagPasswordManagerModal');
     if (!modal) return;
@@ -2527,10 +2538,6 @@ function renderTagPasswordManagerList() {
         });
     });
 }
-
-// ============================================================
-//  设置标签密码弹窗
-// ============================================================
 
 let settingTagName = null;
 
