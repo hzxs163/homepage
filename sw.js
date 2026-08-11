@@ -2,7 +2,7 @@
 //  Service Worker - PWA 离线缓存
 // ============================================================
 
-const CACHE_NAME = 'my-nav-v1';
+const CACHE_NAME = 'my-nav-v2';
 const STATIC_CACHE = 'my-nav-static-v1';
 
 // 需要缓存的资源
