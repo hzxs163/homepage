@@ -429,7 +429,6 @@ body.dark .latency-timeout { background: #f87171; }
 .site-name { font-size: 16px; font-weight: 500; color: #1f2937; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; display: block; transition: color 0.3s; }
 body.dark .site-name { color: #f9fafb; }
 .site-url {
-    display: none;
     color: #6b7280;
     font-size: 12px;
     white-space: nowrap;
@@ -438,6 +437,7 @@ body.dark .site-name { color: #f9fafb; }
     display: block;
     transition: color 0.3s;
     max-width: 100%;
+    display: none;
 }
 body.dark .site-url { color: #9ca3af; }
 .site-tags { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-top: 4px; width: 100%; max-height: 60px; overflow: hidden; align-content: flex-start; }
