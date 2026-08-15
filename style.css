@@ -434,7 +434,6 @@ body.dark .site-name { color: #f9fafb; }
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    display: block;
     transition: color 0.3s;
     max-width: 100%;
     display: none;
