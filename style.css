@@ -569,7 +569,7 @@ body.dark .site-item.sortable-drag { box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
         overflow: hidden;
         text-overflow: ellipsis;
         max-width: 100%;
-        display: block;
+        /* display: block;
     }
 
     .site-tag {
