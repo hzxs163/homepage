@@ -2221,6 +2221,9 @@ document.addEventListener('DOMContentLoaded', function() {
 // ============================================================
 //  34. 懒加载图标
 // ============================================================
+// ============================================================
+//  34. 懒加载图标
+// ============================================================
 
 let lazyObserver = null;
 let iconLoadQueue = [];
@@ -2353,7 +2356,17 @@ function loadSingleIcon(div, site) {
             localStorage.setItem(cacheKey, fallbackUrl);
         };
         fallbackImg.onerror = function() {
-            div._iconLoaded = false;
+            // 🔥 全部失败，保留首字母
+            const letter = (site.name || '链接').charAt(0).toUpperCase();
+            iconEl.innerHTML = letter;
+            iconEl.style.background = '#00b866';
+            iconEl.style.fontSize = '24px';
+            iconEl.style.fontWeight = 'bold';
+            iconEl.style.color = '#fff';
+            iconEl.style.display = 'flex';
+            iconEl.style.alignItems = 'center';
+            iconEl.style.justifyContent = 'center';
+            div._iconLoaded = true;
         };
         fallbackImg.src = fallbackUrl;
     };
@@ -2367,6 +2380,37 @@ function cleanupLazyLoad() {
     }
     iconLoadQueue = [];
     isLoadingIcons = false;
+}
+
+// ============================================================
+//  强制加载所有未加载的图标
+// ============================================================
+
+function forceLoadIcons() {
+    const wrap = document.getElementById('siteListWrap');
+    if (!wrap) return;
+    
+    const items = wrap.querySelectorAll('.site-item');
+    let loadedCount = 0;
+    
+    items.forEach(div => {
+        const iconEl = div.querySelector('.site-icon');
+        // 如果图标是首字母占位（没有 img），加入加载队列
+        if (iconEl && !iconEl.querySelector('img')) {
+            const id = parseInt(div.dataset.id);
+            const site = siteList.find(s => s.id === id);
+            if (site) {
+                // 重置加载状态，重新触发加载
+                div._iconLoaded = false;
+                loadSingleIcon(div, site);
+                loadedCount++;
+            }
+        }
+    });
+    
+    if (loadedCount > 0) {
+        console.log('✅ 强制加载图标:', loadedCount);
+    }
 }
 
 // ============================================================
