@@ -797,22 +797,74 @@ function renderList() {
 //  14. 绑定卡片事件
 // ============================================================
 
+// ============================================================
+//  14. 绑定卡片事件（修复版）
+// ============================================================
+
 function bindCardEvents(wrap) {
     if (!wrap) return;
     
-    if (!wrap._clickBound) {
-        wrap.addEventListener('click', function(e) {
-            const item = e.target.closest('.site-item');
-            if (item) {
-                const url = item.dataset.url;
-                if (url) {
-                    window.open(url, '_blank');
-                }
-            }
-        });
-        wrap._clickBound = true;
+    // 如果已经绑定过，先移除旧的监听器
+    if (wrap._clickBound) {
+        // 使用 removeEventListener 需要保存函数引用，这里用简单方式：重新克隆
+        const newWrap = wrap.cloneNode(true);
+        wrap.parentNode.replaceChild(newWrap, wrap);
+        wrap = document.getElementById('siteListWrap');
+        if (!wrap) return;
+        // 重置标记
+        wrap._clickBound = false;
+        wrap._contextMenuBound = false;
     }
     
+    // 点击打开链接 - 带防抖
+    let clickLock = false;
+    let lastOpenTime = 0;
+    let lastOpenId = null;
+    
+    wrap.addEventListener('click', function(e) {
+        const item = e.target.closest('.site-item');
+        if (!item) return;
+        
+        e.stopPropagation();
+        e.preventDefault();
+        
+        const url = item.dataset.url;
+        const id = item.dataset.id;
+        if (!url) return;
+        
+        const now = Date.now();
+        
+        // 同一卡片 500ms 内不允许重复点击
+        if (id === lastOpenId && (now - lastOpenTime) < 500) {
+            console.log('⏳ 重复点击已忽略');
+            return;
+        }
+        
+        // 全局锁
+        if (clickLock) {
+            console.log('⏳ 正在处理点击，请稍候');
+            return;
+        }
+        
+        clickLock = true;
+        lastOpenId = id;
+        lastOpenTime = now;
+        
+        // 标记处理中（视觉反馈）
+        item.dataset.processing = 'true';
+        
+        setTimeout(() => {
+            window.open(url, '_blank');
+            
+            setTimeout(() => {
+                clickLock = false;
+                item.dataset.processing = 'false';
+            }, 300);
+        }, 50);
+    });
+    wrap._clickBound = true;
+    
+    // 右键菜单
     if (!wrap._contextMenuBound) {
         wrap.addEventListener('contextmenu', function(e) {
             const div = e.target.closest('.site-item');
