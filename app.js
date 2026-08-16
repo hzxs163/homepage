@@ -238,10 +238,6 @@ function toggleTheme() {
 //  8. 数据加载 - 秒开策略
 // ============================================================
 
-// ============================================================
-//  8. 数据加载 - 秒开策略
-// ============================================================
-
 async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
     const statusEl = document.getElementById('syncStatus');
     let hasCache = false;
@@ -316,13 +312,6 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
         hideSkeleton();
         renderAll();
         restoreScrollPosition();
-        
-        // 🔥 强制加载图标
-        setTimeout(() => {
-            if (typeof forceLoadIcons === 'function') {
-                forceLoadIcons();
-            }
-        }, 500);
         
         if (statusEl) statusEl.textContent = '● 云端模式 ✅';
         
@@ -2232,9 +2221,6 @@ document.addEventListener('DOMContentLoaded', function() {
 // ============================================================
 //  34. 懒加载图标
 // ============================================================
-// ============================================================
-//  34. 懒加载图标
-// ============================================================
 
 let lazyObserver = null;
 let iconLoadQueue = [];
@@ -2315,23 +2301,6 @@ function loadSingleIcon(div, site) {
         iconEl.style.fontWeight = '';
         iconEl.style.color = '';
         iconEl.style.display = '';
-        // 如果是 SVG 缓存，直接插入
-        if (cached.startsWith('data:image/svg+xml')) {
-            let svg = cached.replace('data:image/svg+xml,', '');
-            try { svg = decodeURIComponent(svg); } catch(e) {}
-            svg = svg.replace(/<text/g, '<text fill="#ffffff"');
-            iconEl.innerHTML = svg;
-            const svgEl = iconEl.querySelector('svg');
-            if (svgEl) {
-                svgEl.style.width = '48px';
-                svgEl.style.height = '48px';
-            }
-            iconEl.style.background = 'transparent';
-            iconEl.style.display = 'flex';
-            iconEl.style.alignItems = 'center';
-            iconEl.style.justifyContent = 'center';
-            return;
-        }
         const img = document.createElement('img');
         img.src = cached;
         img.alt = site.name || '图标';
@@ -2368,90 +2337,7 @@ function loadSingleIcon(div, site) {
         localStorage.setItem(cacheKey, iconUrl);
     };
     img.onerror = function() {
-        // 🔥 备用方案 1：Yandex Favicon
-        const fallbackUrl = `https://favicon.yandex.net/favicon/${site.url}`;
-        const fallbackImg = new Image();
-        fallbackImg.onload = function() {
-            iconEl.innerHTML = '';
-            iconEl.style.background = 'transparent';
-            const newImg = document.createElement('img');
-            newImg.src = fallbackUrl;
-            newImg.alt = site.name || '图标';
-            newImg.style.width = '100%';
-            newImg.style.height = '100%';
-            newImg.style.objectFit = 'cover';
-            iconEl.appendChild(newImg);
-            localStorage.setItem(cacheKey, fallbackUrl);
-        };
-        fallbackImg.onerror = function() {
-            // 🔥 备用方案 2：Google Favicon
-            const googleUrl = `https://www.google.com/s2/favicons?domain=${site.url}`;
-            const googleImg = new Image();
-            googleImg.onload = function() {
-                iconEl.innerHTML = '';
-                iconEl.style.background = 'transparent';
-                const newImg = document.createElement('img');
-                newImg.src = googleUrl;
-                newImg.alt = site.name || '图标';
-                newImg.style.width = '100%';
-                newImg.style.height = '100%';
-                newImg.style.objectFit = 'cover';
-                iconEl.appendChild(newImg);
-                localStorage.setItem(cacheKey, googleUrl);
-            };
-            googleImg.onerror = function() {
-                // 🔥 备用方案 3：提取内联 SVG
-                fetch(site.url)
-                    .then(res => res.text())
-                    .then(html => {
-                        const match = html.match(/<link[^>]*rel=["']icon["'][^>]*href=["'](data:image\/svg\+xml[^"']*)["']/i);
-                        if (match && match[1]) {
-                            let svg = match[1].replace('data:image/svg+xml,', '');
-                            try { svg = decodeURIComponent(svg); } catch(e) {}
-                            // 强制白色
-                            svg = svg.replace(/<text/g, '<text fill="#ffffff"');
-                            iconEl.innerHTML = svg;
-                            const svgEl = iconEl.querySelector('svg');
-                            if (svgEl) {
-                                svgEl.style.width = '48px';
-                                svgEl.style.height = '48px';
-                            }
-                            iconEl.style.background = 'transparent';
-                            iconEl.style.display = 'flex';
-                            iconEl.style.alignItems = 'center';
-                            iconEl.style.justifyContent = 'center';
-                            localStorage.setItem(cacheKey, match[1]);
-                            console.log('✅ 内联 SVG 图标已加载:', site.name);
-                            return;
-                        }
-                        // 如果还是不行，用首字母
-                        const letter = (site.name || '链接').charAt(0).toUpperCase();
-                        iconEl.innerHTML = letter;
-                        iconEl.style.background = '#00b866';
-                        iconEl.style.fontSize = '24px';
-                        iconEl.style.fontWeight = 'bold';
-                        iconEl.style.color = '#fff';
-                        iconEl.style.display = 'flex';
-                        iconEl.style.alignItems = 'center';
-                        iconEl.style.justifyContent = 'center';
-                        div._iconLoaded = true;
-                    })
-                    .catch(() => {
-                        const letter = (site.name || '链接').charAt(0).toUpperCase();
-                        iconEl.innerHTML = letter;
-                        iconEl.style.background = '#00b866';
-                        iconEl.style.fontSize = '24px';
-                        iconEl.style.fontWeight = 'bold';
-                        iconEl.style.color = '#fff';
-                        iconEl.style.display = 'flex';
-                        iconEl.style.alignItems = 'center';
-                        iconEl.style.justifyContent = 'center';
-                        div._iconLoaded = true;
-                    });
-            };
-            googleImg.src = googleUrl;
-        };
-        fallbackImg.src = fallbackUrl;
+        div._iconLoaded = false;
     };
     img.src = iconUrl;
 }
@@ -2463,37 +2349,6 @@ function cleanupLazyLoad() {
     }
     iconLoadQueue = [];
     isLoadingIcons = false;
-}
-
-// ============================================================
-//  强制加载所有未加载的图标
-// ============================================================
-
-function forceLoadIcons() {
-    const wrap = document.getElementById('siteListWrap');
-    if (!wrap) return;
-    
-    const items = wrap.querySelectorAll('.site-item');
-    let loadedCount = 0;
-    
-    items.forEach(div => {
-        const iconEl = div.querySelector('.site-icon');
-        // 如果图标是首字母占位（没有 img），加入加载队列
-        if (iconEl && !iconEl.querySelector('img')) {
-            const id = parseInt(div.dataset.id);
-            const site = siteList.find(s => s.id === id);
-            if (site) {
-                // 重置加载状态，重新触发加载
-                div._iconLoaded = false;
-                loadSingleIcon(div, site);
-                loadedCount++;
-            }
-        }
-    });
-    
-    if (loadedCount > 0) {
-        console.log('✅ 强制加载图标:', loadedCount);
-    }
 }
 
 // ============================================================
