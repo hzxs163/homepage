@@ -238,6 +238,10 @@ function toggleTheme() {
 //  8. 数据加载 - 秒开策略
 // ============================================================
 
+// ============================================================
+//  8. 数据加载 - 秒开策略
+// ============================================================
+
 async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
     const statusEl = document.getElementById('syncStatus');
     let hasCache = false;
@@ -312,6 +316,13 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
         hideSkeleton();
         renderAll();
         restoreScrollPosition();
+        
+        // 🔥 强制加载图标
+        setTimeout(() => {
+            if (typeof forceLoadIcons === 'function') {
+                forceLoadIcons();
+            }
+        }, 500);
         
         if (statusEl) statusEl.textContent = '● 云端模式 ✅';
         
