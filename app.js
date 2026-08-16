@@ -2337,7 +2337,25 @@ function loadSingleIcon(div, site) {
         localStorage.setItem(cacheKey, iconUrl);
     };
     img.onerror = function() {
-        div._iconLoaded = false;
+        // 🔥 备用方案：用 Google 的 favicon 服务
+        const fallbackUrl = `https://www.google.com/s2/favicons?domain=${site.url}`;
+        const fallbackImg = new Image();
+        fallbackImg.onload = function() {
+            iconEl.innerHTML = '';
+            iconEl.style.background = 'transparent';
+            const newImg = document.createElement('img');
+            newImg.src = fallbackUrl;
+            newImg.alt = site.name || '图标';
+            newImg.style.width = '100%';
+            newImg.style.height = '100%';
+            newImg.style.objectFit = 'cover';
+            iconEl.appendChild(newImg);
+            localStorage.setItem(cacheKey, fallbackUrl);
+        };
+        fallbackImg.onerror = function() {
+            div._iconLoaded = false;
+        };
+        fallbackImg.src = fallbackUrl;
     };
     img.src = iconUrl;
 }
