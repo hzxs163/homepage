@@ -2315,6 +2315,23 @@ function loadSingleIcon(div, site) {
         iconEl.style.fontWeight = '';
         iconEl.style.color = '';
         iconEl.style.display = '';
+        // 如果是 SVG 缓存，直接插入
+        if (cached.startsWith('data:image/svg+xml')) {
+            let svg = cached.replace('data:image/svg+xml,', '');
+            try { svg = decodeURIComponent(svg); } catch(e) {}
+            svg = svg.replace(/<text/g, '<text fill="#ffffff"');
+            iconEl.innerHTML = svg;
+            const svgEl = iconEl.querySelector('svg');
+            if (svgEl) {
+                svgEl.style.width = '48px';
+                svgEl.style.height = '48px';
+            }
+            iconEl.style.background = 'transparent';
+            iconEl.style.display = 'flex';
+            iconEl.style.alignItems = 'center';
+            iconEl.style.justifyContent = 'center';
+            return;
+        }
         const img = document.createElement('img');
         img.src = cached;
         img.alt = site.name || '图标';
@@ -2351,7 +2368,7 @@ function loadSingleIcon(div, site) {
         localStorage.setItem(cacheKey, iconUrl);
     };
     img.onerror = function() {
-        // 🔥 备用方案 1：Yandex Favicon 服务
+        // 🔥 备用方案 1：Yandex Favicon
         const fallbackUrl = `https://favicon.yandex.net/favicon/${site.url}`;
         const fallbackImg = new Image();
         fallbackImg.onload = function() {
@@ -2367,7 +2384,7 @@ function loadSingleIcon(div, site) {
             localStorage.setItem(cacheKey, fallbackUrl);
         };
         fallbackImg.onerror = function() {
-            // 🔥 备用方案 2：Google Favicon 服务
+            // 🔥 备用方案 2：Google Favicon
             const googleUrl = `https://www.google.com/s2/favicons?domain=${site.url}`;
             const googleImg = new Image();
             googleImg.onload = function() {
@@ -2383,29 +2400,26 @@ function loadSingleIcon(div, site) {
                 localStorage.setItem(cacheKey, googleUrl);
             };
             googleImg.onerror = function() {
-                // 🔥 备用方案 3：提取页面中的内联 SVG
+                // 🔥 备用方案 3：提取内联 SVG
                 fetch(site.url)
                     .then(res => res.text())
                     .then(html => {
                         const match = html.match(/<link[^>]*rel=["']icon["'][^>]*href=["'](data:image\/svg\+xml[^"']*)["']/i);
                         if (match && match[1]) {
-                            let svgContent = match[1].replace('data:image/svg+xml,', '');
-                            try {
-                                svgContent = decodeURIComponent(svgContent);
-                            } catch(e) {}
-                            
-                            // 直接插入 SVG
-                            iconEl.innerHTML = svgContent;
-                            iconEl.style.background = 'transparent';
-                            iconEl.style.display = 'flex';
-                            iconEl.style.alignItems = 'center';
-                            iconEl.style.justifyContent = 'center';
-                            iconEl.style.fontSize = '0';
+                            let svg = match[1].replace('data:image/svg+xml,', '');
+                            try { svg = decodeURIComponent(svg); } catch(e) {}
+                            // 强制白色
+                            svg = svg.replace(/<text/g, '<text fill="#ffffff"');
+                            iconEl.innerHTML = svg;
                             const svgEl = iconEl.querySelector('svg');
                             if (svgEl) {
                                 svgEl.style.width = '48px';
                                 svgEl.style.height = '48px';
                             }
+                            iconEl.style.background = 'transparent';
+                            iconEl.style.display = 'flex';
+                            iconEl.style.alignItems = 'center';
+                            iconEl.style.justifyContent = 'center';
                             localStorage.setItem(cacheKey, match[1]);
                             console.log('✅ 内联 SVG 图标已加载:', site.name);
                             return;
