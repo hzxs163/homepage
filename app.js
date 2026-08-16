@@ -2383,17 +2383,57 @@ function loadSingleIcon(div, site) {
                 localStorage.setItem(cacheKey, googleUrl);
             };
             googleImg.onerror = function() {
-                // 🔥 全部失败，保留首字母
-                const letter = (site.name || '链接').charAt(0).toUpperCase();
-                iconEl.innerHTML = letter;
-                iconEl.style.background = '#00b866';
-                iconEl.style.fontSize = '24px';
-                iconEl.style.fontWeight = 'bold';
-                iconEl.style.color = '#fff';
-                iconEl.style.display = 'flex';
-                iconEl.style.alignItems = 'center';
-                iconEl.style.justifyContent = 'center';
-                div._iconLoaded = true;
+                // 🔥 备用方案 3：提取页面中的内联 SVG
+                fetch(site.url)
+                    .then(res => res.text())
+                    .then(html => {
+                        const match = html.match(/<link[^>]*rel=["']icon["'][^>]*href=["'](data:image\/svg\+xml[^"']*)["']/i);
+                        if (match && match[1]) {
+                            let svgContent = match[1].replace('data:image/svg+xml,', '');
+                            try {
+                                svgContent = decodeURIComponent(svgContent);
+                            } catch(e) {}
+                            
+                            // 直接插入 SVG
+                            iconEl.innerHTML = svgContent;
+                            iconEl.style.background = 'transparent';
+                            iconEl.style.display = 'flex';
+                            iconEl.style.alignItems = 'center';
+                            iconEl.style.justifyContent = 'center';
+                            iconEl.style.fontSize = '0';
+                            const svgEl = iconEl.querySelector('svg');
+                            if (svgEl) {
+                                svgEl.style.width = '48px';
+                                svgEl.style.height = '48px';
+                            }
+                            localStorage.setItem(cacheKey, match[1]);
+                            console.log('✅ 内联 SVG 图标已加载:', site.name);
+                            return;
+                        }
+                        // 如果还是不行，用首字母
+                        const letter = (site.name || '链接').charAt(0).toUpperCase();
+                        iconEl.innerHTML = letter;
+                        iconEl.style.background = '#00b866';
+                        iconEl.style.fontSize = '24px';
+                        iconEl.style.fontWeight = 'bold';
+                        iconEl.style.color = '#fff';
+                        iconEl.style.display = 'flex';
+                        iconEl.style.alignItems = 'center';
+                        iconEl.style.justifyContent = 'center';
+                        div._iconLoaded = true;
+                    })
+                    .catch(() => {
+                        const letter = (site.name || '链接').charAt(0).toUpperCase();
+                        iconEl.innerHTML = letter;
+                        iconEl.style.background = '#00b866';
+                        iconEl.style.fontSize = '24px';
+                        iconEl.style.fontWeight = 'bold';
+                        iconEl.style.color = '#fff';
+                        iconEl.style.display = 'flex';
+                        iconEl.style.alignItems = 'center';
+                        iconEl.style.justifyContent = 'center';
+                        div._iconLoaded = true;
+                    });
             };
             googleImg.src = googleUrl;
         };
