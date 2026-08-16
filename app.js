@@ -2340,8 +2340,8 @@ function loadSingleIcon(div, site) {
         localStorage.setItem(cacheKey, iconUrl);
     };
     img.onerror = function() {
-        // 🔥 备用方案：用 Google 的 favicon 服务
-        const fallbackUrl = `https://www.google.com/s2/favicons?domain=${site.url}`;
+        // 🔥 备用方案 1：Yandex Favicon 服务
+        const fallbackUrl = `https://favicon.yandex.net/favicon/${site.url}`;
         const fallbackImg = new Image();
         fallbackImg.onload = function() {
             iconEl.innerHTML = '';
@@ -2356,17 +2356,35 @@ function loadSingleIcon(div, site) {
             localStorage.setItem(cacheKey, fallbackUrl);
         };
         fallbackImg.onerror = function() {
-            // 🔥 全部失败，保留首字母
-            const letter = (site.name || '链接').charAt(0).toUpperCase();
-            iconEl.innerHTML = letter;
-            iconEl.style.background = '#00b866';
-            iconEl.style.fontSize = '24px';
-            iconEl.style.fontWeight = 'bold';
-            iconEl.style.color = '#fff';
-            iconEl.style.display = 'flex';
-            iconEl.style.alignItems = 'center';
-            iconEl.style.justifyContent = 'center';
-            div._iconLoaded = true;
+            // 🔥 备用方案 2：Google Favicon 服务
+            const googleUrl = `https://www.google.com/s2/favicons?domain=${site.url}`;
+            const googleImg = new Image();
+            googleImg.onload = function() {
+                iconEl.innerHTML = '';
+                iconEl.style.background = 'transparent';
+                const newImg = document.createElement('img');
+                newImg.src = googleUrl;
+                newImg.alt = site.name || '图标';
+                newImg.style.width = '100%';
+                newImg.style.height = '100%';
+                newImg.style.objectFit = 'cover';
+                iconEl.appendChild(newImg);
+                localStorage.setItem(cacheKey, googleUrl);
+            };
+            googleImg.onerror = function() {
+                // 🔥 全部失败，保留首字母
+                const letter = (site.name || '链接').charAt(0).toUpperCase();
+                iconEl.innerHTML = letter;
+                iconEl.style.background = '#00b866';
+                iconEl.style.fontSize = '24px';
+                iconEl.style.fontWeight = 'bold';
+                iconEl.style.color = '#fff';
+                iconEl.style.display = 'flex';
+                iconEl.style.alignItems = 'center';
+                iconEl.style.justifyContent = 'center';
+                div._iconLoaded = true;
+            };
+            googleImg.src = googleUrl;
         };
         fallbackImg.src = fallbackUrl;
     };
