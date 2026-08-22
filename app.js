@@ -3,7 +3,7 @@
 // ============================================================
 
 // ============================================================
-//  目录.
+//  目录
 // ============================================================
 //  1. 全局变量
 //  2. 工具函数
@@ -102,6 +102,15 @@ function getSiteLogoSync(site) {
     if (cached) {
         return cached;
     }
+    
+    // 🔥 使用 favicon.im 获取图标
+    try {
+        const u = new URL(site.url || '');
+        const domain = u.hostname.replace(/^www\./, '');
+        if (domain) {
+            return `https://favicon.im/${domain}`;
+        }
+    } catch { }
     
     return null;
 }
@@ -290,17 +299,31 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
             throw new Error('返回的数据不是数组');
         }
         
+        // 🔥 修改：读取 icon_url 字段
         siteList = data.map(item => {
             let tags = item.tags || [];
             if (typeof tags === 'string') {
                 try { tags = JSON.parse(tags); } catch { tags = []; }
             }
             if (!Array.isArray(tags)) tags = [];
+            
+            // 🔥 读取 icon_url
+            let iconUrl = item.icon_url || '';
+            
+            // 🔥 自动缓存到 localStorage
+            if (iconUrl) {
+                const cacheKey = 'icon_' + item.id;
+                if (!localStorage.getItem(cacheKey)) {
+                    localStorage.setItem(cacheKey, iconUrl);
+                }
+            }
+            
             return {
                 id: item.id,
                 name: item.title || '未命名',
                 url: item.url || '',
                 icon: item.icon || '',
+                icon_url: iconUrl,  // 🔥 新增
                 tags: tags,
                 sort: item.sort_order || 0,
                 click_count: item.click_count || 0
@@ -2264,7 +2287,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ============================================================
-//  34. 懒加载图标
+//  34. 懒加载图标（先显示首字母，后台加载 favicon.im）
 // ============================================================
 
 let lazyObserver = null;
@@ -2339,6 +2362,8 @@ function loadSingleIcon(div, site) {
     
     const cacheKey = 'icon_' + site.id;
     const cached = localStorage.getItem(cacheKey);
+    
+    // 🔥 如果有缓存，直接显示缓存的图标
     if (cached) {
         iconEl.innerHTML = '';
         iconEl.style.background = 'transparent';
@@ -2352,38 +2377,79 @@ function loadSingleIcon(div, site) {
         img.style.width = '100%';
         img.style.height = '100%';
         img.style.objectFit = 'cover';
+        img.style.borderRadius = '8px';
         iconEl.appendChild(img);
         return;
     }
     
-    let iconUrl;
+    // 🔥 先显示首字母（立即显示，用户不会看到空白或占位图）
+    const letter = (site.name || '链接').charAt(0).toUpperCase();
+    iconEl.innerHTML = letter;
+    iconEl.style.background = '#00b866';
+    iconEl.style.color = '#fff';
+    iconEl.style.fontSize = '24px';
+    iconEl.style.fontWeight = 'bold';
+    iconEl.style.display = 'flex';
+    iconEl.style.alignItems = 'center';
+    iconEl.style.justifyContent = 'center';
+    iconEl.style.borderRadius = '8px';
+    
+    // 🔥 尝试获取域名
+    let domain;
     try {
         const u = new URL(site.url || '');
-        iconUrl = `${u.protocol}//${u.hostname}/favicon.ico`;
+        domain = u.hostname.replace(/^www\./, '');
     } catch {
+        // 无法解析URL，保留首字母
         return;
     }
     
+    if (!domain) {
+        // 没有域名，保留首字母
+        return;
+    }
+    
+    const iconUrl = `https://favicon.im/${domain}`;
+    
+    // 🔥 后台加载图标（不阻塞页面显示）
     const img = new Image();
+    let loaded = false;
+    
     img.onload = function() {
-        iconEl.innerHTML = '';
-        iconEl.style.background = 'transparent';
-        iconEl.style.fontSize = '';
-        iconEl.style.fontWeight = '';
-        iconEl.style.color = '';
-        iconEl.style.display = '';
-        const newImg = document.createElement('img');
-        newImg.src = iconUrl;
-        newImg.alt = site.name || '图标';
-        newImg.style.width = '100%';
-        newImg.style.height = '100%';
-        newImg.style.objectFit = 'cover';
-        iconEl.appendChild(newImg);
-        localStorage.setItem(cacheKey, iconUrl);
+        if (loaded) return;
+        loaded = true;
+        
+        // 检查是否是有效图标（不是默认的 "f" 占位图）
+        // 有效图标通常大于 16x16，占位图很小或透明
+        if (img.width > 16 && img.height > 16) {
+            // 有效图标，替换首字母
+            iconEl.innerHTML = '';
+            iconEl.style.background = 'transparent';
+            iconEl.style.fontSize = '';
+            iconEl.style.fontWeight = '';
+            iconEl.style.color = '';
+            iconEl.style.display = '';
+            const newImg = document.createElement('img');
+            newImg.src = iconUrl;
+            newImg.alt = site.name || '图标';
+            newImg.style.width = '100%';
+            newImg.style.height = '100%';
+            newImg.style.objectFit = 'cover';
+            newImg.style.borderRadius = '8px';
+            iconEl.appendChild(newImg);
+            // 缓存有效图标
+            localStorage.setItem(cacheKey, iconUrl);
+        }
+        // 否则是占位图，保留首字母，不缓存
     };
+    
     img.onerror = function() {
-        div._iconLoaded = false;
+        // 加载失败，保留首字母
+        loaded = true;
     };
+    
+    // 设置超时，如果加载太慢也放弃
+    img.timeout = 5000;
     img.src = iconUrl;
 }
 
