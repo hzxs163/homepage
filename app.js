@@ -456,10 +456,13 @@ async function renderTagsFilter() {
     };
     tagsList.appendChild(allTag);
 
+    // 🔥 一次性加载所有标签密码
+    const passwords = await loadTagPasswords();
+
     for (const tag of allTags) {
         const item = document.createElement('div');
         item.className = `tag-item ${activeTag === tag ? 'active' : ''}`;
-        const passwordHash = await getTagPasswordHash(tag);
+        const passwordHash = passwords[tag] || null;
         const lockIcon = passwordHash ? '🔒 ' : '';
         item.innerText = lockIcon + tag;
         item.dataset.tag = tag;
