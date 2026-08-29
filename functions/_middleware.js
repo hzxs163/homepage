@@ -1,7 +1,7 @@
 // ============================================================
 //  Pages Functions 中间件
 //  作用：验证 JWT token，将 userId 注入到 context.data 中
-//  所有 /api/* 请求都会经过这里（除了 /api/auth/login）
+//  放行：首页、静态资源、登录接口
 // ============================================================
 
 // 从 Authorization header 解析 token
@@ -29,16 +29,37 @@ function verifyToken(token) {
 export async function onRequest(context) {
     const { request, env, next } = context;
     const url = new URL(request.url);
+    const path = url.pathname;
 
     // ============================================================
-    //  登录接口不需要验证 token
+    //  放行首页和静态资源（不需要登录）
     // ============================================================
-    if (url.pathname === '/api/auth/login') {
+    const isStaticOrPage =
+        path === '/' ||
+        path === '/index.html' ||
+        path.startsWith('/style.css') ||
+        path.startsWith('/app.js') ||
+        path.startsWith('/auth.js') ||
+        path.startsWith('/admin.js') ||
+        path.startsWith('/api.js') ||
+        path.startsWith('/Sortable.min.js') ||
+        path.startsWith('/manifest.json') ||
+        path.startsWith('/sw.js') ||
+        path.startsWith('/icons/');
+
+    if (isStaticOrPage) {
         return next();
     }
 
     // ============================================================
-    //  验证 token
+    //  登录接口不需要验证 token
+    // ============================================================
+    if (path === '/api/auth/login') {
+        return next();
+    }
+
+    // ============================================================
+    //  所有 /api/* 请求需要验证 token
     // ============================================================
     const token = getTokenFromRequest(request);
     if (!token) {
