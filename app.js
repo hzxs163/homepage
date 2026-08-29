@@ -2340,8 +2340,8 @@ const BATCH_SIZE = 5;
 // 🔥 队列控制
 let iconTaskQueue = [];
 let isProcessingQueue = false;
-const CONCURRENT_LIMIT = 2;   // 同时只加载 2 个
-const QUEUE_INTERVAL = 300;    // 每批间隔 300ms
+const CONCURRENT_LIMIT = 1;   // 同时只加载 2 个
+const QUEUE_INTERVAL = 600;    // 每批间隔 300ms
 
 function startLazyLoad(items) {
     iconLoadQueue = items.filter(({ site }) => {
