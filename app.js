@@ -67,7 +67,6 @@ let tagSortOrder = [];
 let isTagSortMode = false;
 let tagSortableInstance = null;
 let isLoading = true;
-let isRenderingTags = false;
 
 // ============================================================
 //  2. 工具函数
@@ -435,21 +434,17 @@ function getAllTags() {
     return [...new Set(tags)];
 }
 
-let isRenderingTags = false;
-
 async function renderTagsFilter() {
     // 🔥 防重复调用
-    if (isRenderingTags) {
-        console.warn('⚠️ renderTagsFilter 正在执行中，跳过重复调用');
+    if (window._renderingTags) {
+        console.warn('⚠️ 跳过重复调用');
         return;
     }
-    isRenderingTags = true;
+    window._renderingTags = true;
 
     try {
         const tagsList = document.getElementById('tagsList');
         if (!tagsList) return;
-
-        // 🔥 先清空
         tagsList.innerHTML = '';
         const allTags = getAllTags();
 
@@ -539,9 +534,10 @@ async function renderTagsFilter() {
         } catch (e) {}
 
     } finally {
-        isRenderingTags = false;
+        window._renderingTags = false;
     }
 }
+
 
 
 // ============================================================
