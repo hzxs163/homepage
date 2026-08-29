@@ -2542,91 +2542,50 @@ function cleanupLazyLoad() {
 }
 
 // ============================================================
-//  35. 标签密码管理（D1 存储版）
+//  35. 标签密码管理（localStorage 版 - 临时恢复）
 // ============================================================
 
 const DEFAULT_TAG_PASSWORDS = {};
 
-// 从 D1 加载标签密码
-async function loadTagPasswords() {
+// 从 localStorage 加载标签密码
+function loadTagPasswords() {
     try {
-        const response = await fetch('/api/tag-passwords', {
-            headers: {
-                'Authorization': 'Bearer ' + localStorage.getItem('token')
-            }
-        });
-        if (!response.ok) {
-            throw new Error('加载密码失败');
+        const saved = localStorage.getItem('tagPasswords');
+        if (saved) {
+            return JSON.parse(saved);
         }
-        const data = await response.json();
-        // 转换为对象格式 { tag_name: password_hash }
-        const result = {};
-        data.forEach(item => {
-            result[item.tag_name] = item.password_hash;
-        });
-        return result;
-    } catch (err) {
-        console.error('加载标签密码失败:', err);
-        return {};
-    }
+    } catch { }
+    return {};
 }
 
-// 保存标签密码到 D1
-async function saveTagPasswords(passwords) {
-    try {
-        const response = await fetch('/api/tag-passwords', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + localStorage.getItem('token')
-            },
-            body: JSON.stringify({ passwords })
-        });
-        if (!response.ok) {
-            throw new Error('保存密码失败');
-        }
-        return await response.json();
-    } catch (err) {
-        console.error('保存标签密码失败:', err);
-        throw err;
-    }
+// 保存标签密码到 localStorage
+function saveTagPasswords(passwords) {
+    localStorage.setItem('tagPasswords', JSON.stringify(passwords));
 }
 
 // 获取标签密码哈希
-async function getTagPasswordHash(tagName) {
-    return null;  // 🔥 直接返回 null，跳过密码验证
-    
+function getTagPasswordHash(tagName) {
+    const passwords = loadTagPasswords();
+    return passwords[tagName] || null;
 }
 
 // 设置标签密码
-async function setTagPassword(tagName, plainPassword) {
-    const passwords = await loadTagPasswords();
+function setTagPassword(tagName, plainPassword) {
+    const passwords = loadTagPasswords();
     if (plainPassword && plainPassword.trim() !== '') {
-        const hash = await sha256(plainPassword.trim());
+        const hash = sha256(plainPassword.trim());
         passwords[tagName] = hash;
     } else {
         delete passwords[tagName];
     }
-    await saveTagPasswords(passwords);
+    saveTagPasswords(passwords);
 }
 
 // 删除标签密码（单个）
-async function deleteTagPassword(tagName) {
-    try {
-        const response = await fetch(`/api/tag-passwords/${encodeURIComponent(tagName)}`, {
-            method: 'DELETE',
-            headers: {
-                'Authorization': 'Bearer ' + localStorage.getItem('token')
-            }
-        });
-        if (!response.ok) {
-            throw new Error('删除密码失败');
-        }
-        return await response.json();
-    } catch (err) {
-        console.error('删除标签密码失败:', err);
-        throw err;
-    }
+function deleteTagPassword(tagName) {
+    const passwords = loadTagPasswords();
+    delete passwords[tagName];
+    saveTagPasswords(passwords);
 }
 
 // 判断标签是否已解锁（sessionStorage）
@@ -2649,9 +2608,9 @@ function clearUnlockedTags() {
     sessionStorage.removeItem('unlockedTags');
 }
 
-async function sha256(message) {
+function sha256(message) {
     const msgBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashBuffer = crypto.subtle.digest('SHA-256', msgBuffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
@@ -2738,11 +2697,11 @@ function closeTagPasswordManager() {
     document.getElementById('tagPasswordManagerModal').classList.remove('show');
 }
 
-async function renderTagPasswordManagerList() {
+function renderTagPasswordManagerList() {
     const list = document.getElementById('tagPasswordManagerList');
     if (!list) return;
     const allTags = getAllTags();
-    const passwords = await loadTagPasswords();
+    const passwords = loadTagPasswords();
     if (allTags.length === 0) {
         list.innerHTML = '<div style="padding:20px;text-align:center;color:#6b7280;">暂无标签</div>';
         return;
@@ -2767,11 +2726,11 @@ async function renderTagPasswordManagerList() {
         });
     });
     list.querySelectorAll('.tag-password-remove-btn').forEach(btn => {
-        btn.addEventListener('click', async function() {
+        btn.addEventListener('click', function() {
             const tag = this.dataset.tag;
             if (confirm(`确定要移除标签「${tag}」的密码吗？`)) {
-                await setTagPassword(tag, '');
-                await renderTagPasswordManagerList();
+                setTagPassword(tag, '');
+                renderTagPasswordManagerList();
                 showToast(`✅ 已移除标签「${tag}」的密码`);
             }
         });
@@ -2811,9 +2770,9 @@ async function confirmSetTagPassword() {
         errorEl.style.display = 'block';
         return;
     }
-    await setTagPassword(settingTagName, input);
+    setTagPassword(settingTagName, input);
     closeSetTagPasswordModal();
-    await renderTagPasswordManagerList();
+    renderTagPasswordManagerList();
     showToast(`✅ 已为标签「${settingTagName}」设置密码`);
 }
 
