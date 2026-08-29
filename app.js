@@ -2594,8 +2594,8 @@ async function saveTagPasswords(passwords) {
 
 // 获取标签密码哈希
 async function getTagPasswordHash(tagName) {
-    const passwords = await loadTagPasswords();
-    return passwords[tagName] || null;
+    return null;  // 🔥 直接返回 null，跳过密码验证
+    
 }
 
 // 设置标签密码
