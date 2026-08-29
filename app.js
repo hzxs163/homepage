@@ -1480,10 +1480,30 @@ async function saveSite() {
         selectedTags = parts.filter((t, i, arr) => t && arr.indexOf(t) === i);
     }
 
+    // ============================================================
+    // 🔥 生成 icon_url（从域名提取）
+    // ============================================================
+    let iconUrl = '';
+    try {
+        const u = new URL(url);
+        let domain = u.hostname.replace(/^www\./, '');
+        // 去掉端口号
+        domain = domain.replace(/:\d+$/, '');
+        // 过滤内网地址
+        if (domain && 
+            !domain.startsWith('192.168.') && 
+            !domain.startsWith('10.') &&
+            !domain.startsWith('127.0.0.') &&
+            !domain.startsWith('localhost')) {
+            iconUrl = `https://favicon.im/${domain}`;
+        }
+    } catch {}
+
     const data = {
         title: name,
         url,
         icon,
+        icon_url: iconUrl,  // 🔥 新增
         tags: selectedTags,
         sort_order: sort
     };
@@ -1689,6 +1709,7 @@ async function handleFileImport(event) {
 
             const existingUrls = new Set(siteList.map(s => s.url));
 
+            // 🔥 导入时保留 icon_url
             const allImportData = data
                 .filter(item => {
                     const name = item.name || item.title;
@@ -1698,6 +1719,7 @@ async function handleFileImport(event) {
                     title: item.name || item.title,
                     url: item.url,
                     icon: item.icon || '',
+                    icon_url: item.icon_url || '',  // 🔥 新增
                     tags: item.tags || [],
                     sort: item.sort_order || item.sort || 0
                 }));
@@ -1731,6 +1753,15 @@ async function handleFileImport(event) {
                     successCount += result.successCount || 0;
                     skipCount += result.skipCount || 0;
                     errorCount += result.errorCount || 0;
+                    
+                    // 🔥 导入成功后，恢复 icon_url 到 localStorage
+                    if (result.items) {
+                        result.items.forEach(item => {
+                            if (item.icon_url) {
+                                localStorage.setItem('icon_' + item.id, item.icon_url);
+                            }
+                        });
+                    }
                 } catch (err) {
                     errorCount += batch.length;
                     console.error('批次导入失败:', err);
@@ -1759,7 +1790,15 @@ async function handleFileImport(event) {
 async function exportJson() {
     try {
         const data = await API.exportLinks();
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        // 🔥 为每条数据添加 icon_url（从 localStorage 读取）
+        const exportData = data.map(item => {
+            const iconUrl = localStorage.getItem('icon_' + item.id) || '';
+            return {
+                ...item,
+                icon_url: iconUrl
+            };
+        });
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -2399,8 +2438,17 @@ function loadSingleIcon(div, site) {
     try {
         const u = new URL(site.url || '');
         domain = u.hostname.replace(/^www\./, '');
+        // 去掉端口号
+        domain = domain.replace(/:\d+$/, '');
+        // 过滤内网地址
+        if (!domain || 
+            domain.startsWith('192.168.') || 
+            domain.startsWith('10.') ||
+            domain.startsWith('127.0.0.') ||
+            domain.startsWith('localhost')) {
+            return;  // 内网地址不获取图标
+        }
     } catch {
-        // 无法解析URL，保留首字母
         return;
     }
     
