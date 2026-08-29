@@ -1913,6 +1913,7 @@ function initSortSelector() {
 // ============================================================
 
 function initApp() {
+    sessionStorage.removeItem('unlockedTags');
     loadTagSortOrder();
     loadActiveTag();
     initTheme();
