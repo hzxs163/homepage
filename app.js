@@ -2328,11 +2328,20 @@ document.addEventListener('DOMContentLoaded', function() {
 // ============================================================
 //  34. 懒加载图标（先显示首字母，后台加载 favicon.im）
 // ============================================================
+// ============================================================
+//  34. 懒加载图标（先显示首字母，后台加载 favicon.im）
+// ============================================================
 
 let lazyObserver = null;
 let iconLoadQueue = [];
 let isLoadingIcons = false;
 const BATCH_SIZE = 5;
+
+// 🔥 队列控制
+let iconTaskQueue = [];
+let isProcessingQueue = false;
+const CONCURRENT_LIMIT = 2;   // 同时只加载 2 个
+const QUEUE_INTERVAL = 300;    // 每批间隔 300ms
 
 function startLazyLoad(items) {
     iconLoadQueue = items.filter(({ site }) => {
@@ -2391,6 +2400,7 @@ function loadVisibleIcons() {
     }
 }
 
+// 🔥 修改：带队列控制的 loadSingleIcon
 function loadSingleIcon(div, site) {
     if (div._iconLoaded) return;
     div._iconLoaded = true;
@@ -2402,7 +2412,7 @@ function loadSingleIcon(div, site) {
     const cacheKey = 'icon_' + site.id;
     const cached = localStorage.getItem(cacheKey);
     
-    // 🔥 如果有缓存，直接显示缓存的图标
+    // 如果有缓存，直接显示
     if (cached) {
         iconEl.innerHTML = '';
         iconEl.style.background = 'transparent';
@@ -2421,7 +2431,7 @@ function loadSingleIcon(div, site) {
         return;
     }
     
-    // 🔥 先显示首字母（立即显示，用户不会看到空白或占位图）
+    // 先显示首字母
     const letter = (site.name || '链接').charAt(0).toUpperCase();
     iconEl.innerHTML = letter;
     iconEl.style.background = '#00b866';
@@ -2433,72 +2443,94 @@ function loadSingleIcon(div, site) {
     iconEl.style.justifyContent = 'center';
     iconEl.style.borderRadius = '8px';
     
-    // 🔥 尝试获取域名
-    let domain;
-    try {
-        const u = new URL(site.url || '');
-        domain = u.hostname.replace(/^www\./, '');
-        // 去掉端口号
-        domain = domain.replace(/:\d+$/, '');
-        // 过滤内网地址
-        if (!domain || 
-            domain.startsWith('192.168.') || 
-            domain.startsWith('10.') ||
-            domain.startsWith('127.0.0.') ||
-            domain.startsWith('localhost')) {
-            return;  // 内网地址不获取图标
+    // 🔥 加入队列，不立即加载
+    iconTaskQueue.push({ div, site, iconEl });
+    processQueue();
+}
+
+// 🔥 处理队列
+function processQueue() {
+    if (isProcessingQueue) return;
+    if (iconTaskQueue.length === 0) return;
+    
+    isProcessingQueue = true;
+    
+    // 取出 2 个
+    const batch = iconTaskQueue.splice(0, CONCURRENT_LIMIT);
+    let completed = 0;
+    
+    batch.forEach(({ div, site, iconEl }) => {
+        // 获取域名
+        let domain;
+        try {
+            const u = new URL(site.url || '');
+            domain = u.hostname.replace(/^www\./, '');
+            domain = domain.replace(/:\d+$/, '');
+            if (!domain || 
+                domain.startsWith('192.168.') || 
+                domain.startsWith('10.') ||
+                domain.startsWith('127.0.0.') ||
+                domain.startsWith('localhost')) {
+                completed++;
+                return;
+            }
+        } catch {
+            completed++;
+            return;
         }
-    } catch {
-        return;
-    }
-    
-    if (!domain) {
-        // 没有域名，保留首字母
-        return;
-    }
-    
-    const iconUrl = `https://favicon.im/${domain}`;
-    
-    // 🔥 后台加载图标（不阻塞页面显示）
-    const img = new Image();
-    let loaded = false;
-    
-    img.onload = function() {
-        if (loaded) return;
-        loaded = true;
         
-        // 检查是否是有效图标（不是默认的 "f" 占位图）
-        // 有效图标通常大于 16x16，占位图很小或透明
-        if (img.width > 16 && img.height > 16) {
-            // 有效图标，替换首字母
-            iconEl.innerHTML = '';
-            iconEl.style.background = 'transparent';
-            iconEl.style.fontSize = '';
-            iconEl.style.fontWeight = '';
-            iconEl.style.color = '';
-            iconEl.style.display = '';
-            const newImg = document.createElement('img');
-            newImg.src = iconUrl;
-            newImg.alt = site.name || '图标';
-            newImg.style.width = '100%';
-            newImg.style.height = '100%';
-            newImg.style.objectFit = 'cover';
-            newImg.style.borderRadius = '8px';
-            iconEl.appendChild(newImg);
-            // 缓存有效图标
-            localStorage.setItem(cacheKey, iconUrl);
-        }
-        // 否则是占位图，保留首字母，不缓存
-    };
+        const iconUrl = `https://favicon.im/${domain}`;
+        const cacheKey = 'icon_' + site.id;
+        
+        const img = new Image();
+        let loaded = false;
+        
+        img.onload = function() {
+            if (loaded) return;
+            loaded = true;
+            
+            if (img.width > 16 && img.height > 16) {
+                iconEl.innerHTML = '';
+                iconEl.style.background = 'transparent';
+                iconEl.style.fontSize = '';
+                iconEl.style.fontWeight = '';
+                iconEl.style.color = '';
+                iconEl.style.display = '';
+                const newImg = document.createElement('img');
+                newImg.src = iconUrl;
+                newImg.alt = site.name || '图标';
+                newImg.style.width = '100%';
+                newImg.style.height = '100%';
+                newImg.style.objectFit = 'cover';
+                newImg.style.borderRadius = '8px';
+                iconEl.appendChild(newImg);
+                localStorage.setItem(cacheKey, iconUrl);
+            }
+            completed++;
+            if (completed === batch.length) {
+                isProcessingQueue = false;
+                setTimeout(processQueue, QUEUE_INTERVAL);
+            }
+        };
+        
+        img.onerror = function() {
+            loaded = true;
+            completed++;
+            if (completed === batch.length) {
+                isProcessingQueue = false;
+                setTimeout(processQueue, QUEUE_INTERVAL);
+            }
+        };
+        
+        img.timeout = 5000;
+        img.src = iconUrl;
+    });
     
-    img.onerror = function() {
-        // 加载失败，保留首字母
-        loaded = true;
-    };
-    
-    // 设置超时，如果加载太慢也放弃
-    img.timeout = 5000;
-    img.src = iconUrl;
+    // 如果 batch 为空（都是内网地址），立即处理下一批
+    if (batch.length === 0) {
+        isProcessingQueue = false;
+        processQueue();
+    }
 }
 
 function cleanupLazyLoad() {
@@ -2507,8 +2539,11 @@ function cleanupLazyLoad() {
         lazyObserver = null;
     }
     iconLoadQueue = [];
+    iconTaskQueue = [];
+    isProcessingQueue = false;
     isLoadingIcons = false;
 }
+
 
 // ============================================================
 //  35. 标签密码管理
