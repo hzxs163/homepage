@@ -353,8 +353,11 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
 // ============================================================
 //  9. 重新绑定标签事件
 // ============================================================
+// ============================================================
+//  9. 重新绑定标签事件
+// ============================================================
 
-function rebindTagEvents() {
+async function rebindTagEvents() {
     const tagsList = document.getElementById('tagsList');
     if (!tagsList) return;
     
@@ -383,6 +386,10 @@ function rebindTagEvents() {
     });
 }
 
+
+// ============================================================
+//  10. 渲染 - 标签相关
+// ============================================================
 // ============================================================
 //  10. 渲染 - 标签相关
 // ============================================================
@@ -426,7 +433,7 @@ function getAllTags() {
     return tags;
 }
 
-function renderTagsFilter() {
+async function renderTagsFilter() {
     const tagsList = document.getElementById('tagsList');
     if (!tagsList) return;
     const allTags = getAllTags();
@@ -449,10 +456,10 @@ function renderTagsFilter() {
     };
     tagsList.appendChild(allTag);
 
-    allTags.forEach(tag => {
+    for (const tag of allTags) {
         const item = document.createElement('div');
         item.className = `tag-item ${activeTag === tag ? 'active' : ''}`;
-        const passwordHash = getTagPasswordHash(tag);
+        const passwordHash = await getTagPasswordHash(tag);
         const lockIcon = passwordHash ? '🔒 ' : '';
         item.innerText = lockIcon + tag;
         item.dataset.tag = tag;
@@ -476,7 +483,7 @@ function renderTagsFilter() {
             }
         };
         tagsList.appendChild(item);
-    });
+    }
 
     const sortBtn = document.createElement('div');
     sortBtn.className = 'tag-sort-toggle';
@@ -514,6 +521,7 @@ function renderTagsFilter() {
         localStorage.setItem('tagsHTML', tagsList.innerHTML);
     } catch (e) {}
 }
+
 
 // ============================================================
 //  11. 标签拖拽排序
