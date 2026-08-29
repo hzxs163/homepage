@@ -362,10 +362,10 @@ function rebindTagEvents() {
         const newItem = item.cloneNode(true);
         item.parentNode.replaceChild(newItem, item);
         
-        newItem.onclick = function() {
+        newItem.onclick = async function() {
             if (isTagSortMode) return;
             const tagName = this.dataset.tag;
-            const passwordHash = getTagPasswordHash(tagName);
+            const passwordHash = await getTagPasswordHash(tagName);
             if (passwordHash && !isTagUnlocked(tagName)) {
                 showTagPasswordModal(tagName, passwordHash);
                 return;
@@ -460,7 +460,7 @@ function renderTagsFilter() {
         item.onclick = async function() {
             if (isTagSortMode) return;
             const tagName = this.dataset.tag;
-            const passwordHash = getTagPasswordHash(tagName);
+            const passwordHash = await getTagPasswordHash(tagName);
             if (passwordHash && !isTagUnlocked(tagName)) {
                 showTagPasswordModal(tagName, passwordHash);
                 return;
@@ -2328,9 +2328,6 @@ document.addEventListener('DOMContentLoaded', function() {
 // ============================================================
 //  34. 懒加载图标（先显示首字母，后台加载 favicon.im）
 // ============================================================
-// ============================================================
-//  34. 懒加载图标（先显示首字母，后台加载 favicon.im）
-// ============================================================
 
 let lazyObserver = null;
 let iconLoadQueue = [];
@@ -2340,8 +2337,8 @@ const BATCH_SIZE = 5;
 // 🔥 队列控制
 let iconTaskQueue = [];
 let isProcessingQueue = false;
-const CONCURRENT_LIMIT = 1;   // 同时只加载 2 个
-const QUEUE_INTERVAL = 600;    // 每批间隔 300ms
+const CONCURRENT_LIMIT = 1;   // 同时只加载 1 个
+const QUEUE_INTERVAL = 600;    // 每批间隔 600ms
 
 function startLazyLoad(items) {
     iconLoadQueue = items.filter(({ site }) => {
@@ -2455,7 +2452,7 @@ function processQueue() {
     
     isProcessingQueue = true;
     
-    // 取出 2 个
+    // 取出 1 个
     const batch = iconTaskQueue.splice(0, CONCURRENT_LIMIT);
     let completed = 0;
     
@@ -2544,47 +2541,95 @@ function cleanupLazyLoad() {
     isLoadingIcons = false;
 }
 
-
 // ============================================================
-//  35. 标签密码管理
+//  35. 标签密码管理（D1 存储版）
 // ============================================================
 
-const DEFAULT_TAG_PASSWORDS = {
-    "私密": "7c6a180b36896a0a8c02787eeafb0e4c1f6e2c5c6e3d4f8a9b0c1d2e3f4a5b6c7"
-};
+const DEFAULT_TAG_PASSWORDS = {};
 
-function loadTagPasswords() {
+// 从 D1 加载标签密码
+async function loadTagPasswords() {
     try {
-        const saved = localStorage.getItem('tagPasswords');
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            if (Object.keys(parsed).length > 0) return parsed;
+        const response = await fetch('/api/tag-passwords', {
+            headers: {
+                'Authorization': 'Bearer ' + localStorage.getItem('token')
+            }
+        });
+        if (!response.ok) {
+            throw new Error('加载密码失败');
         }
-    } catch { }
-    saveTagPasswords(DEFAULT_TAG_PASSWORDS);
-    return { ...DEFAULT_TAG_PASSWORDS };
+        const data = await response.json();
+        // 转换为对象格式 { tag_name: password_hash }
+        const result = {};
+        data.forEach(item => {
+            result[item.tag_name] = item.password_hash;
+        });
+        return result;
+    } catch (err) {
+        console.error('加载标签密码失败:', err);
+        return {};
+    }
 }
 
-function saveTagPasswords(passwords) {
-    localStorage.setItem('tagPasswords', JSON.stringify(passwords));
+// 保存标签密码到 D1
+async function saveTagPasswords(passwords) {
+    try {
+        const response = await fetch('/api/tag-passwords', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + localStorage.getItem('token')
+            },
+            body: JSON.stringify({ passwords })
+        });
+        if (!response.ok) {
+            throw new Error('保存密码失败');
+        }
+        return await response.json();
+    } catch (err) {
+        console.error('保存标签密码失败:', err);
+        throw err;
+    }
 }
 
-function getTagPasswordHash(tagName) {
-    const passwords = loadTagPasswords();
+// 获取标签密码哈希
+async function getTagPasswordHash(tagName) {
+    const passwords = await loadTagPasswords();
     return passwords[tagName] || null;
 }
 
+// 设置标签密码
 async function setTagPassword(tagName, plainPassword) {
-    const passwords = loadTagPasswords();
+    const passwords = await loadTagPasswords();
     if (plainPassword && plainPassword.trim() !== '') {
         const hash = await sha256(plainPassword.trim());
         passwords[tagName] = hash;
     } else {
         delete passwords[tagName];
     }
-    saveTagPasswords(passwords);
+    await saveTagPasswords(passwords);
 }
 
+// 删除标签密码（单个）
+async function deleteTagPassword(tagName) {
+    try {
+        const response = await fetch(`/api/tag-passwords/${encodeURIComponent(tagName)}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': 'Bearer ' + localStorage.getItem('token')
+            }
+        });
+        if (!response.ok) {
+            throw new Error('删除密码失败');
+        }
+        return await response.json();
+    } catch (err) {
+        console.error('删除标签密码失败:', err);
+        throw err;
+    }
+}
+
+// 判断标签是否已解锁（sessionStorage）
 function isTagUnlocked(tagName) {
     try {
         const unlocked = JSON.parse(sessionStorage.getItem('unlockedTags') || '[]');
@@ -2693,11 +2738,11 @@ function closeTagPasswordManager() {
     document.getElementById('tagPasswordManagerModal').classList.remove('show');
 }
 
-function renderTagPasswordManagerList() {
+async function renderTagPasswordManagerList() {
     const list = document.getElementById('tagPasswordManagerList');
     if (!list) return;
     const allTags = getAllTags();
-    const passwords = loadTagPasswords();
+    const passwords = await loadTagPasswords();
     if (allTags.length === 0) {
         list.innerHTML = '<div style="padding:20px;text-align:center;color:#6b7280;">暂无标签</div>';
         return;
@@ -2722,11 +2767,11 @@ function renderTagPasswordManagerList() {
         });
     });
     list.querySelectorAll('.tag-password-remove-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', async function() {
             const tag = this.dataset.tag;
             if (confirm(`确定要移除标签「${tag}」的密码吗？`)) {
-                setTagPassword(tag, '');
-                renderTagPasswordManagerList();
+                await setTagPassword(tag, '');
+                await renderTagPasswordManagerList();
                 showToast(`✅ 已移除标签「${tag}」的密码`);
             }
         });
@@ -2768,7 +2813,7 @@ async function confirmSetTagPassword() {
     }
     await setTagPassword(settingTagName, input);
     closeSetTagPasswordModal();
-    renderTagPasswordManagerList();
+    await renderTagPasswordManagerList();
     showToast(`✅ 已为标签「${settingTagName}」设置密码`);
 }
 
