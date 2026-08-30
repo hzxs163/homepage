@@ -122,23 +122,54 @@ function isMobileDevice() {
 // ============================================================
 //  3. 标签排序存储
 // ============================================================
+// ============================================================
+//  3. 标签排序存储（D1）
+// ============================================================
 
-function loadTagSortOrder() {
+// 从 D1 加载标签排序
+async function loadTagSortOrder() {
     try {
-        const saved = localStorage.getItem('tagSortOrder');
-        if (saved) {
-            tagSortOrder = JSON.parse(saved);
+        const response = await fetch('/api/tags/order', {
+            headers: {
+                'Authorization': 'Bearer ' + localStorage.getItem('token')
+            }
+        });
+        if (!response.ok) {
+            throw new Error('加载排序失败');
+        }
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+            tagSortOrder = data;
             return true;
         }
-    } catch { }
-    return false;
+        return false;
+    } catch (err) {
+        console.error('加载标签排序失败:', err);
+        return false;
+    }
 }
 
-function saveTagSortOrder() {
+// 保存标签排序到 D1
+async function saveTagSortOrder() {
     try {
-        localStorage.setItem('tagSortOrder', JSON.stringify(tagSortOrder));
-    } catch { }
+        const response = await fetch('/api/tags/order', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + localStorage.getItem('token')
+            },
+            body: JSON.stringify({ tags: tagSortOrder })
+        });
+        if (!response.ok) {
+            throw new Error('保存排序失败');
+        }
+        return true;
+    } catch (err) {
+        console.error('保存标签排序失败:', err);
+        return false;
+    }
 }
+
 
 // ============================================================
 //  4. 记住上次选中的标签
@@ -353,9 +384,6 @@ async function loadLinks(sortBy = 'sort_order', order = 'ASC') {
 // ============================================================
 //  9. 重新绑定标签事件
 // ============================================================
-// ============================================================
-//  9. 重新绑定标签事件
-// ============================================================
 
 async function rebindTagEvents() {
     const tagsList = document.getElementById('tagsList');
@@ -387,9 +415,6 @@ async function rebindTagEvents() {
 }
 
 
-// ============================================================
-//  10. 渲染 - 标签相关
-// ============================================================
 // ============================================================
 //  10. 渲染 - 标签相关
 // ============================================================
@@ -538,8 +563,9 @@ async function renderTagsFilter() {
     }
 }
 
-
-
+// ============================================================
+//  11. 标签拖拽排序
+// ============================================================
 // ============================================================
 //  11. 标签拖拽排序
 // ============================================================
@@ -561,8 +587,14 @@ function toggleTagSortMode() {
                 tagSortOrder.push(tag);
             }
         });
-        saveTagSortOrder();
-        showToast('排序已保存');
+        // 🔥 改为保存到 D1
+        saveTagSortOrder().then(success => {
+            if (success) {
+                showToast('排序已保存');
+            } else {
+                showToast('排序保存失败');
+            }
+        });
     }
     renderTagsFilter();
     renderList();
@@ -599,8 +631,14 @@ function initTagSortable() {
                     tagSortOrder.push(tag);
                 }
             });
-            saveTagSortOrder();
-            showToast('标签顺序已更新');
+            // 🔥 改为保存到 D1
+            saveTagSortOrder().then(success => {
+                if (success) {
+                    showToast('标签顺序已更新');
+                } else {
+                    showToast('排序保存失败');
+                }
+            });
         }
     });
 }
@@ -2570,6 +2608,9 @@ function cleanupLazyLoad() {
 // ============================================================
 //  35. 标签密码管理（D1 存储版）
 // ============================================================
+// ============================================================
+//  35. 标签管理（加密 + 排序）
+// ============================================================
 
 // 从 D1 加载标签密码
 async function loadTagPasswords() {
@@ -2758,57 +2799,155 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+// ============================================================
+//  标签管理弹窗（整合排序 + 加密）
+// ============================================================
+
+let tagManagerSortableInstance = null;
+
 function openTagPasswordManager() {
     const modal = document.getElementById('tagPasswordManagerModal');
     if (!modal) return;
     modal.classList.add('show');
-    renderTagPasswordManagerList();
+    renderTagManagerList();
 }
 
 function closeTagPasswordManager() {
     document.getElementById('tagPasswordManagerModal').classList.remove('show');
+    if (tagManagerSortableInstance) {
+        tagManagerSortableInstance.destroy();
+        tagManagerSortableInstance = null;
+    }
 }
 
-async function renderTagPasswordManagerList() {
-    const list = document.getElementById('tagPasswordManagerList');
+async function renderTagManagerList() {
+    const list = document.getElementById('tagManagerList');
     if (!list) return;
+
     const allTags = getAllTags();
     const passwords = await loadTagPasswords();
+
     if (allTags.length === 0) {
         list.innerHTML = '<div style="padding:20px;text-align:center;color:#6b7280;">暂无标签</div>';
         return;
     }
+
+    // 构建列表
     let html = '';
-    allTags.forEach(tag => {
+    const sortedTags = [...allTags];
+
+    // 如果有保存的排序，按排序显示
+    if (tagSortOrder.length > 0) {
+        sortedTags.sort((a, b) => {
+            const indexA = tagSortOrder.indexOf(a);
+            const indexB = tagSortOrder.indexOf(b);
+            if (indexA === -1 && indexB === -1) return 0;
+            if (indexA === -1) return 1;
+            if (indexB === -1) return -1;
+            return indexA - indexB;
+        });
+    }
+
+    sortedTags.forEach(tag => {
         const hasPassword = passwords[tag] && passwords[tag] !== '';
+        const isAll = tag === '全部';
+        const lockIcon = hasPassword ? '🔒' : '🔓';
+        const statusText = hasPassword ? '已加密' : '未加密';
+        const actionBtn = hasPassword
+            ? `<button class="tag-password-set-btn" data-tag="${tag}" style="padding:2px 10px;border:1px solid #e8f8f0;border-radius:4px;background:#f9fbfc;cursor:pointer;font-size:12px;color:#4b5563;">修改</button>
+               <button class="tag-password-remove-btn" data-tag="${tag}" style="padding:2px 10px;border:1px solid #fef2f2;border-radius:4px;background:#fef2f2;cursor:pointer;font-size:12px;color:#ef4444;">移除</button>`
+            : `<button class="tag-password-set-btn" data-tag="${tag}" style="padding:2px 10px;border:1px solid #e8f8f0;border-radius:4px;background:#f9fbfc;cursor:pointer;font-size:12px;color:#4b5563;">设置</button>`;
+
         html += `
-            <div class="tag-password-item" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f0f0f0;gap:10px;">
-                <span style="font-weight:500;font-size:14px;min-width:80px;">${tag}</span>
-                <span style="font-size:13px;color:#6b7280;flex:1;">${hasPassword ? '🔒 已加密' : '🔓 未加密'}</span>
-                <button class="tag-password-set-btn" data-tag="${tag}" style="padding:4px 14px;border:1px solid #e8f8f0;border-radius:6px;background:#f9fbfc;cursor:pointer;font-size:13px;color:#4b5563;">${hasPassword ? '修改' : '设置'}</button>
-                ${hasPassword ? `<button class="tag-password-remove-btn" data-tag="${tag}" style="padding:4px 10px;border:1px solid #fef2f2;border-radius:6px;background:#fef2f2;cursor:pointer;font-size:13px;color:#ef4444;">移除</button>` : ''}
+            <div class="tag-manager-item" data-tag="${tag}" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #f0f0f0;gap:10px;${isAll ? 'opacity:0.6;' : ''}">
+                <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+                    <span style="cursor:${isAll ? 'default' : 'grab'};color:#9ca3af;font-size:16px;user-select:none;${isAll ? 'visibility:hidden;' : ''}">☰</span>
+                    <span style="font-weight:500;font-size:14px;min-width:60px;">${tag}</span>
+                    <span style="font-size:13px;color:#6b7280;flex:1;">${lockIcon} ${statusText}</span>
+                </div>
+                <div style="display:flex;gap:6px;flex-shrink:0;">
+                    ${actionBtn}
+                </div>
             </div>
         `;
     });
+
     list.innerHTML = html;
+
+    // 绑定加密按钮事件
     list.querySelectorAll('.tag-password-set-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const tag = this.dataset.tag;
             showSetTagPasswordModal(tag);
         });
     });
+
     list.querySelectorAll('.tag-password-remove-btn').forEach(btn => {
         btn.addEventListener('click', async function() {
             const tag = this.dataset.tag;
             if (confirm(`确定要移除标签「${tag}」的密码吗？`)) {
                 await setTagPassword(tag, '');
-                await renderTagPasswordManagerList();
+                await renderTagManagerList();
                 showToast(`✅ 已移除标签「${tag}」的密码`);
             }
         });
     });
+
+    // 🔥 初始化拖拽排序
+    initTagManagerSortable();
 }
 
+function initTagManagerSortable() {
+    const container = document.getElementById('tagManagerList');
+    if (!container) return;
+
+    if (tagManagerSortableInstance) {
+        tagManagerSortableInstance.destroy();
+        tagManagerSortableInstance = null;
+    }
+
+    tagManagerSortableInstance = new Sortable(container, {
+        animation: 150,
+        ghostClass: 'tag-sort-ghost',
+        handle: '.tag-manager-item:not(:first-child) span:first-child',
+        filter: '.tag-manager-item:first-child',
+        preventOnFilter: false,
+        onStart: () => {
+            container.querySelectorAll('.tag-manager-item').forEach(el => {
+                el.style.cursor = 'grabbing';
+            });
+        },
+        onEnd: async () => {
+            container.querySelectorAll('.tag-manager-item').forEach(el => {
+                el.style.cursor = '';
+            });
+
+            // 获取排序后的标签列表（排除"全部"）
+            const items = container.querySelectorAll('.tag-manager-item');
+            const newOrder = [];
+            items.forEach(el => {
+                const tag = el.dataset.tag;
+                if (tag && tag !== '全部') {
+                    newOrder.push(tag);
+                }
+            });
+
+            if (newOrder.length > 0) {
+                tagSortOrder = newOrder;
+                const success = await saveTagSortOrder();
+                if (success) {
+                    showToast('✅ 标签顺序已保存');
+                    // 刷新标签筛选栏
+                    renderTagsFilter();
+                } else {
+                    showToast('❌ 保存排序失败');
+                }
+            }
+        }
+    });
+}
+
+// 设置标签密码弹窗相关
 let settingTagName = null;
 
 function showSetTagPasswordModal(tagName) {
@@ -2844,7 +2983,7 @@ async function confirmSetTagPassword() {
     }
     await setTagPassword(settingTagName, input);
     closeSetTagPasswordModal();
-    await renderTagPasswordManagerList();
+    await renderTagManagerList();
     showToast(`✅ 已为标签「${settingTagName}」设置密码`);
 }
 
@@ -2873,3 +3012,4 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
