@@ -1967,11 +1967,14 @@ function initSortSelector() {
 // ============================================================
 //  29. 初始化
 // ============================================================
+// ============================================================
+//  29. 初始化
+// ============================================================
 
 async function initApp() {
     sessionStorage.removeItem('unlockedTags');
     
-    // 🔥 等待排序加载完成
+    // 🔥 先加载排序
     await loadTagSortOrder();
     
     loadActiveTag();
@@ -1979,20 +1982,28 @@ async function initApp() {
     initTagsFilter();
     loadLatencyCache();
     initSortSelector();
-    
+
+    // 🔥 隐藏标签列表，避免闪烁
+    const tagsList = document.getElementById('tagsList');
+    if (tagsList) tagsList.style.opacity = '0';
+
+    // 🔥 加载数据
     const sortSelect = document.getElementById('sortSelect');
     if (sortSelect) {
         const saved = localStorage.getItem('sortPreference');
         if (saved) {
             const [sortBy, order] = saved.split(':');
-            loadLinks(sortBy, order);
+            await loadLinks(sortBy, order);
         } else {
-            loadLinks();
+            await loadLinks();
         }
     } else {
-        loadLinks();
+        await loadLinks();
     }
-    
+
+    // 🔥 数据加载完成后显示标签
+    if (tagsList) tagsList.style.opacity = '1';
+
     window.addEventListener('scroll', handleScroll);
     handleScroll();
     const lockBtn = document.getElementById('dragLockBtn');
@@ -2004,20 +2015,6 @@ async function initApp() {
 }
 window.initApp = initApp;
 
-function loadLatencyCache() {
-    try {
-        const saved = localStorage.getItem('latencyCache');
-        if (saved) {
-            latencyCache = JSON.parse(saved);
-        }
-    } catch { latencyCache = {}; }
-}
-
-function saveLatencyCache() {
-    try {
-        localStorage.setItem('latencyCache', JSON.stringify(latencyCache));
-    } catch { }
-}
 
 // ============================================================
 //  30. 管理员功能
