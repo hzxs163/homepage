@@ -150,10 +150,14 @@ export async function onRequest(context) {
     const method = request.method;
     const userId = context.data.userId;
 
+    console.log('🔍 [id].js path:', path, 'method:', method);
+
     // 提取 id：/api/links/123 或 /api/links/123/sort
     const parts = path.split('/');
     const id = parseInt(parts[3]);
     const subAction = parts[4];
+
+    console.log('🔍 parts:', parts, 'id:', id, 'subAction:', subAction);  // 🔥 加这行
 
     if (isNaN(id)) {
         return errorResponse('无效的 ID', 400);
