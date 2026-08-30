@@ -418,6 +418,9 @@ async function rebindTagEvents() {
 // ============================================================
 //  10. 渲染 - 标签相关
 // ============================================================
+// ============================================================
+//  10. 渲染 - 标签相关
+// ============================================================
 
 function getAllTags() {
     if (!Array.isArray(siteList)) {
@@ -436,6 +439,7 @@ function getAllTags() {
 
     let tags = Object.keys(tagCount);
 
+    // 🔥 如果有保存的排序，按排序显示
     if (tagSortOrder.length > 0) {
         const ordered = [];
         const unordered = [];
@@ -446,16 +450,19 @@ function getAllTags() {
                 tagSet.delete(t);
             }
         });
+        // 剩下的按数量排序（新增的标签）
         const remaining = Array.from(tagSet);
         remaining.sort((a, b) => tagCount[b] - tagCount[a] || a.localeCompare(b));
         tags = ordered.concat(remaining);
     } else {
+        // 没有保存的排序，按数量排序
         tags.sort((a, b) => tagCount[b] - tagCount[a] || a.localeCompare(b));
+        // 保存默认排序到 D1
         tagSortOrder = tags;
         saveTagSortOrder();
     }
 
-    // 🔥 最终去重
+    // 去重
     return [...new Set(tags)];
 }
 
@@ -563,9 +570,6 @@ async function renderTagsFilter() {
     }
 }
 
-// ============================================================
-//  11. 标签拖拽排序
-// ============================================================
 // ============================================================
 //  11. 标签拖拽排序
 // ============================================================
@@ -1964,9 +1968,12 @@ function initSortSelector() {
 //  29. 初始化
 // ============================================================
 
-function initApp() {
+async function initApp() {
     sessionStorage.removeItem('unlockedTags');
-    loadTagSortOrder();
+    
+    // 🔥 等待排序加载完成
+    await loadTagSortOrder();
+    
     loadActiveTag();
     initTheme();
     initTagsFilter();
