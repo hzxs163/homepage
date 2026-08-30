@@ -471,7 +471,7 @@ async function renderTagsFilter() {
 
     renderTagsTimer = setTimeout(async () => {
         if (window._renderingTags) {
-            console.warn('⚠️ 跳过重复调用');
+            // console.warn('⚠️ 跳过重复调用');
             return;
         }
         window._renderingTags = true;
