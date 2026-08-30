@@ -689,6 +689,9 @@ body.dark .site-item.sortable-drag { box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
     /* 容器 */
     .container { padding: 16px 14px; }
 }
+    .add-quick-btn {
+    display: none !important;
+}
 
 @media (min-width: 769px) {
     .tags-filter-title::after { display: none; }
