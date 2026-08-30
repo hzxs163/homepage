@@ -453,7 +453,9 @@ export default {
             path.startsWith('/Sortable.min.js') ||
             path.startsWith('/manifest.json') ||
             path.startsWith('/sw.js') ||
-            path.startsWith('/icons/')) {
+            path.startsWith('/icons/') ||
+            path === '/worker.js'  // <-- 在这里添加这一行
+            ) {
             return env.ASSETS.fetch(request);
         }
 
