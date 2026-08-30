@@ -480,10 +480,6 @@ async function renderTagsFilter() {
             const tagsList = document.getElementById('tagsList');
             if (!tagsList) return;
 
-            if (isFirstRender) {
-                tagsList.style.opacity = '0';
-            }
-
             tagsList.innerHTML = '';
             const allTags = getAllTags();
 
@@ -571,11 +567,8 @@ async function renderTagsFilter() {
                 localStorage.setItem('tagsHTML', tagsList.innerHTML);
             } catch (e) {}
 
-            if (isFirstRender) {
-                isFirstRender = false;
-                tagsList.style.opacity = '1';
-                tagsList.style.transition = 'opacity 0.3s ease';
-            }
+            // 🔥 渲染完成后渐显
+            tagsList.classList.add('show');
 
         } finally {
             window._renderingTags = false;
