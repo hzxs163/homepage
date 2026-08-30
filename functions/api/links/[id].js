@@ -150,37 +150,32 @@ export async function onRequest(context) {
     const method = request.method;
     const userId = context.data.userId;
 
-    console.log('🔍 [id].js path:', path, 'method:', method);
-
     // 提取 id：/api/links/123 或 /api/links/123/sort
     const parts = path.split('/');
     const id = parseInt(parts[3]);
-    const subAction = parts[4];
-
-    console.log('🔍 parts:', parts, 'id:', id, 'subAction:', subAction);  // 🔥 加这行
 
     if (isNaN(id)) {
         return errorResponse('无效的 ID', 400);
     }
 
-    // 路由分发
-    if (subAction === 'sort' && method === 'PUT') {
+    // 🔥 使用 path.endsWith 匹配子路由（更可靠）
+    if (path.endsWith('/sort') && method === 'PUT') {
         return handlePutSort(request, env, userId, id);
     }
 
-    if (subAction === 'click' && method === 'POST') {
+    if (path.endsWith('/click') && method === 'POST') {
         return handlePostClick(request, env, userId, id);
     }
 
-    if (subAction === 'icon' && method === 'GET') {
+    if (path.endsWith('/icon') && method === 'GET') {
         return handleGetIcon(request, env, userId, id);
     }
 
-    if (subAction === 'icon' && method === 'POST') {
+    if (path.endsWith('/icon') && method === 'POST') {
         return handlePostIcon(request, env, userId, id);
     }
 
-    // 无子路由
+    // 无子路由：/api/links/:id
     if (method === 'PUT') {
         return handlePutLink(request, env, userId, id);
     }
