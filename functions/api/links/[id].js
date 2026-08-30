@@ -17,6 +17,31 @@ function errorResponse(message, status = 400) {
 }
 
 // ============================================================
+//  PUT /api/links/:id/sort - 更新排序
+// ============================================================
+async function handlePutSort(request, env, userId, id) {
+    try {
+        const { sort_order } = await request.json();
+
+        const existing = await env.DB.prepare(
+            'SELECT * FROM links WHERE id = ? AND user_id = ?'
+        ).bind(id, userId).first();
+
+        if (!existing) {
+            return errorResponse('链接不存在', 404);
+        }
+
+        await env.DB.prepare(
+            'UPDATE links SET sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?'
+        ).bind(sort_order, id, userId).run();
+
+        return jsonResponse({ success: true });
+    } catch (e) {
+        return errorResponse('更新排序失败: ' + e.message, 500);
+    }
+}
+
+// ============================================================
 //  PUT /api/links/:id - 更新链接
 // ============================================================
 async function handlePutLink(request, env, userId, id) {
@@ -63,31 +88,6 @@ async function handleDeleteLink(request, env, userId, id) {
         return jsonResponse({ success: true });
     } catch (e) {
         return errorResponse('删除失败: ' + e.message, 500);
-    }
-}
-
-// ============================================================
-//  PUT /api/links/:id/sort - 更新排序
-// ============================================================
-async function handlePutSort(request, env, userId, id) {
-    try {
-        const { sort_order } = await request.json();
-
-        const existing = await env.DB.prepare(
-            'SELECT * FROM links WHERE id = ? AND user_id = ?'
-        ).bind(id, userId).first();
-
-        if (!existing) {
-            return errorResponse('链接不存在', 404);
-        }
-
-        await env.DB.prepare(
-            'UPDATE links SET sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?'
-        ).bind(sort_order, id, userId).run();
-
-        return jsonResponse({ success: true });
-    } catch (e) {
-        return errorResponse('更新排序失败: ' + e.message, 500);
     }
 }
 
@@ -150,7 +150,7 @@ export async function onRequest(context) {
     const method = request.method;
     const userId = context.data.userId;
 
-    // 提取 id：/api/links/123 或 /api/links/123/sort
+    // 提取 id
     const parts = path.split('/');
     const id = parseInt(parts[3]);
 
@@ -158,20 +158,20 @@ export async function onRequest(context) {
         return errorResponse('无效的 ID', 400);
     }
 
-    // 🔥 使用 path.endsWith 匹配子路由（更可靠）
-    if (path.endsWith('/sort') && method === 'PUT') {
+    // 🔥 关键：用 path.includes 匹配子路由，放在最前面
+    if (path.includes('/sort') && method === 'PUT') {
         return handlePutSort(request, env, userId, id);
     }
 
-    if (path.endsWith('/click') && method === 'POST') {
+    if (path.includes('/click') && method === 'POST') {
         return handlePostClick(request, env, userId, id);
     }
 
-    if (path.endsWith('/icon') && method === 'GET') {
+    if (path.includes('/icon') && method === 'GET') {
         return handleGetIcon(request, env, userId, id);
     }
 
-    if (path.endsWith('/icon') && method === 'POST') {
+    if (path.includes('/icon') && method === 'POST') {
         return handlePostIcon(request, env, userId, id);
     }
 
