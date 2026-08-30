@@ -119,6 +119,22 @@ function isMobileDevice() {
     return /Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
 }
 
+function loadLatencyCache() {
+    try {
+        const saved = localStorage.getItem('latencyCache');
+        if (saved) {
+            latencyCache = JSON.parse(saved);
+        }
+    } catch { latencyCache = {}; }
+}
+
+function saveLatencyCache() {
+    try {
+        localStorage.setItem('latencyCache', JSON.stringify(latencyCache));
+    } catch { }
+}
+
+
 // ============================================================
 //  3. 标签排序存储
 // ============================================================
@@ -1971,6 +1987,7 @@ async function initApp() {
     loadActiveTag();
     initTheme();
     initTagsFilter();
+    loadLatencyCache();  // 🔥 加这行
     initSortSelector();
 
     // 🔥 重置渲染标记（让标签只渲染一次）
