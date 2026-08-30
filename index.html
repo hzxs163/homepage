@@ -56,9 +56,9 @@
             <!-- 功能按钮（全局隐藏，只在下拉菜单中显示） -->
             <div class="btn-group">
                 <button class="add-btn" id="addBtn">添加网址</button>
-                <button class="refresh-btn" id="refreshBtn">测速</button>
-                <button class="import-json-btn" id="importBtn">导入</button>
-                <button class="export-json-btn" id="exportBtn">导出</button>
+                <button class="refresh-btn" id="refreshBtn">网站测速</button>
+                <button class="import-json-btn" id="importBtn">导入书签</button>
+                <button class="export-json-btn" id="exportBtn">导出书签</button>
                 <button class="drag-lock-btn" id="dragLockBtn">🔒</button>
                 <button class="theme-toggle-btn" id="themeToggleBtn">🌞</button>
                 <input type="file" id="fileInput" accept=".json">
@@ -83,16 +83,16 @@
                         <div class="dropdown-divider"></div>
                         <div class="dropdown-item menu-add" id="menuAdd">➕ 添加网址</div>
                         <div class="dropdown-item menu-speed" id="menuSpeed">📊 测速</div>
-                        <div class="dropdown-item menu-import" id="menuImport">📥 导入</div>
-                        <div class="dropdown-item menu-export" id="menuExport">📤 导出</div>
+                        <div class="dropdown-item menu-import" id="menuImport">📥 导入书签</div>
+                        <div class="dropdown-item menu-export" id="menuExport">📤 导出书签</div>
                         <div class="dropdown-item menu-lock" id="menuLock">🔒 拖拽锁定</div>
                         <div class="dropdown-item menu-theme" id="menuTheme">🌞 切换主题</div>
                         <div class="dropdown-divider"></div>
-                        <div class="dropdown-item menu-admin" id="adminMenuItem" style="display:none;">👥 管理</div>
-                        <!-- 🔥 新增：标签密码管理入口 -->
-                        <div class="dropdown-item menu-tag-password" id="tagPasswordMenuItem">🔐 标签密码管理</div>
+                        <div class="dropdown-item menu-tag-password" id="tagPasswordMenuItem">🔐 标签管理</div>
+                        <div class="dropdown-item menu-admin" id="adminMenuItem" style="display:none;">👥 管理登录</div>
+                                              
                         <div class="dropdown-divider"></div>
-                        <div class="dropdown-item logout-item" id="logoutMenuItem">🚪 退出</div>
+                        <div class="dropdown-item logout-item" id="logoutMenuItem">🚪 退出账户</div>
                     </div>
                 </div>
             </div>
