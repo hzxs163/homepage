@@ -423,7 +423,6 @@ async function rebindTagEvents() {
 // ============================================================
 
 let renderTagsTimer = null;
-let isFirstRender = true;
 
 function getAllTags() {
     if (!Array.isArray(siteList)) {
@@ -471,7 +470,6 @@ async function renderTagsFilter() {
 
     renderTagsTimer = setTimeout(async () => {
         if (window._renderingTags) {
-            // console.warn('⚠️ 跳过重复调用');
             return;
         }
         window._renderingTags = true;
@@ -567,14 +565,13 @@ async function renderTagsFilter() {
                 localStorage.setItem('tagsHTML', tagsList.innerHTML);
             } catch (e) {}
 
-            // 🔥 渲染完成后渐显
             tagsList.classList.add('show');
 
         } finally {
             window._renderingTags = false;
             renderTagsTimer = null;
         }
-    }, 30);
+    }, 50);
 }
 
 // ============================================================
