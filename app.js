@@ -2102,6 +2102,9 @@ async function adminDeleteUser(username) {
 // ============================================================
 //  31. 事件绑定
 // ============================================================
+// ============================================================
+//  31. 事件绑定
+// ============================================================
 
 document.addEventListener('DOMContentLoaded', function() {
     const loginBtn = document.getElementById('loginBtn');
@@ -2133,6 +2136,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const addBtn = document.getElementById('addBtn');
     if (addBtn) {
         addBtn.addEventListener('click', () => openEditModal());
+    }
+
+    // 🔥 快捷添加按钮
+    const addQuickBtn = document.getElementById('addQuickBtn');
+    if (addQuickBtn) {
+        addQuickBtn.addEventListener('click', () => openEditModal());
     }
 
     const refreshBtn = document.getElementById('refreshBtn');
@@ -2191,27 +2200,27 @@ document.addEventListener('DOMContentLoaded', function() {
     const backToTopBtn = document.getElementById('backToTopBtn');
     if (backToTopBtn) backToTopBtn.addEventListener('click', backToTop);
 
-const addModal = document.getElementById('addModal');
-const adminModal = document.getElementById('adminModal');
-if (addModal) {
-    addModal.addEventListener('click', (e) => {
-        if (e.target === addModal) closeModal();
-    });
-    addModal.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && addModal.classList.contains('show')) {
-            const confirmBtn = document.getElementById('modalConfirmBtn');
-            if (confirmBtn) {
-                e.preventDefault();
-                confirmBtn.click();
+    const addModal = document.getElementById('addModal');
+    const adminModal = document.getElementById('adminModal');
+    if (addModal) {
+        addModal.addEventListener('click', (e) => {
+            if (e.target === addModal) closeModal();
+        });
+        addModal.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && addModal.classList.contains('show')) {
+                const confirmBtn = document.getElementById('modalConfirmBtn');
+                if (confirmBtn) {
+                    e.preventDefault();
+                    confirmBtn.click();
+                }
             }
-        }
-    });
-}
-if (adminModal) {
-    adminModal.addEventListener('click', (e) => {
-        if (e.target === adminModal) closeAdminPanel();
-    });
-}
+        });
+    }
+    if (adminModal) {
+        adminModal.addEventListener('click', (e) => {
+            if (e.target === adminModal) closeAdminPanel();
+        });
+    }
 
     if (isLoggedIn()) {
         const user = JSON.parse(localStorage.getItem('user') || '{}');
