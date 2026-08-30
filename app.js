@@ -1980,7 +1980,7 @@ async function initApp() {
     loadActiveTag();
     initTheme();
     initTagsFilter();
-    loadLatencyCache();
+    // loadLatencyCache();
     initSortSelector();
 
     // 🔥 隐藏标签列表，避免闪烁
