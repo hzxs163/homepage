@@ -240,6 +240,36 @@ body.dark .sort-select:focus {
     transition: all 0.2s;
     white-space: nowrap;
 }
+
+.add-quick-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 14px;
+    height: 38px;
+    border: 1px solid #e8f8f0;
+    border-radius: 8px;
+    background: #f9fbfc;
+    cursor: pointer;
+    font-size: 16px;
+    color: #00b866;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+.add-quick-btn:hover {
+    border-color: #00b866;
+    background: #e8f8f0;
+}
+body.dark .add-quick-btn {
+    background: #343541;
+    border-color: #404258;
+    color: #10b981;
+}
+body.dark .add-quick-btn:hover {
+    border-color: #10b981;
+    background: #404258;
+}
+
 body.dark .user-btn {
     background: #343541;
     border-color: #404258;
@@ -571,6 +601,9 @@ body.dark .site-item.sortable-drag { box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
 /* ========== 右键菜单 ========== */
 .context-menu { user-select: none; }
 .context-menu div { user-select: none; }
+
+
+
 
 /* ========== 移动端适配 ========== */
 @media (max-width: 768px) {
