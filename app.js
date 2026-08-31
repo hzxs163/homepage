@@ -438,7 +438,7 @@ async function rebindTagEvents() {
 //  10. 渲染 - 标签相关
 // ============================================================
 
-let tagsRendered = false;
+let isRenderingTags = false;
 
 function getAllTags() {
     if (!Array.isArray(siteList)) {
@@ -480,104 +480,113 @@ function getAllTags() {
 }
 
 async function renderTagsFilter() {
-    // 如果已经渲染过，直接返回
-    if (tagsRendered) {
+    // 🔥 防重复调用
+    if (isRenderingTags) {
+        console.log('⏳ 标签正在渲染，跳过重复调用');
         return;
     }
+    isRenderingTags = true;
 
-    const tagsList = document.getElementById('tagsList');
-    if (!tagsList) return;
+    try {
+        const tagsList = document.getElementById('tagsList');
+        if (!tagsList) return;
 
-    tagsList.innerHTML = '';
-    const allTags = getAllTags();
+        // 清空
+        tagsList.innerHTML = '';
+        tagsList.classList.remove('show');
 
-    const allTag = document.createElement('div');
-    allTag.className = `tag-item all ${activeTag === 'all' ? 'active' : ''}`;
-    allTag.innerText = '全部';
-    allTag.dataset.tag = 'all';
-    allTag.onclick = () => {
-        document.querySelectorAll('.tag-item').forEach(t => t.classList.remove('active'));
-        allTag.classList.add('active');
-        activeTag = 'all';
-        saveActiveTag('all');
-        renderList();
-        if (isMobileDevice()) {
-            const wrap = document.getElementById('tagsFilterWrap');
-            if (wrap) wrap.classList.remove('expanded');
-        }
-    };
-    tagsList.appendChild(allTag);
+        const allTags = getAllTags();
 
-    const passwords = await loadTagPasswords();
-
-    for (const tag of allTags) {
-        const item = document.createElement('div');
-        item.className = `tag-item ${activeTag === tag ? 'active' : ''}`;
-        const passwordHash = passwords[tag] || null;
-        const lockIcon = passwordHash ? '🔒 ' : '';
-        item.innerText = lockIcon + tag;
-        item.dataset.tag = tag;
-        item.dataset.sortable = 'true';
-        item.onclick = async function() {
-            if (isTagSortMode) return;
-            const tagName = this.dataset.tag;
-            const passwordHash = await getTagPasswordHash(tagName);
-            if (passwordHash && !isTagUnlocked(tagName)) {
-                showTagPasswordModal(tagName, passwordHash);
-                return;
-            }
+        const allTag = document.createElement('div');
+        allTag.className = `tag-item all ${activeTag === 'all' ? 'active' : ''}`;
+        allTag.innerText = '全部';
+        allTag.dataset.tag = 'all';
+        allTag.onclick = () => {
             document.querySelectorAll('.tag-item').forEach(t => t.classList.remove('active'));
-            this.classList.add('active');
-            activeTag = tagName;
-            saveActiveTag(tagName);
+            allTag.classList.add('active');
+            activeTag = 'all';
+            saveActiveTag('all');
             renderList();
             if (isMobileDevice()) {
                 const wrap = document.getElementById('tagsFilterWrap');
                 if (wrap) wrap.classList.remove('expanded');
             }
         };
-        tagsList.appendChild(item);
+        tagsList.appendChild(allTag);
+
+        const passwords = await loadTagPasswords();
+
+        for (const tag of allTags) {
+            const item = document.createElement('div');
+            item.className = `tag-item ${activeTag === tag ? 'active' : ''}`;
+            const passwordHash = passwords[tag] || null;
+            const lockIcon = passwordHash ? '🔒 ' : '';
+            item.innerText = lockIcon + tag;
+            item.dataset.tag = tag;
+            item.dataset.sortable = 'true';
+            item.onclick = async function() {
+                if (isTagSortMode) return;
+                const tagName = this.dataset.tag;
+                const passwordHash = await getTagPasswordHash(tagName);
+                if (passwordHash && !isTagUnlocked(tagName)) {
+                    showTagPasswordModal(tagName, passwordHash);
+                    return;
+                }
+                document.querySelectorAll('.tag-item').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                activeTag = tagName;
+                saveActiveTag(tagName);
+                renderList();
+                if (isMobileDevice()) {
+                    const wrap = document.getElementById('tagsFilterWrap');
+                    if (wrap) wrap.classList.remove('expanded');
+                }
+            };
+            tagsList.appendChild(item);
+        }
+
+        const sortBtn = document.createElement('div');
+        sortBtn.className = 'tag-sort-toggle';
+        sortBtn.innerHTML = isTagSortMode ? '✅ 完成' : '⚙️';
+        sortBtn.title = isTagSortMode ? '完成排序' : '拖拽调整标签顺序';
+        sortBtn.style.cssText = `
+            padding: 4px 10px;
+            border-radius: 6px;
+            background: ${isTagSortMode ? '#10b981' : '#e5e7eb'};
+            color: ${isTagSortMode ? '#fff' : '#4b5563'};
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            border: none;
+            margin-left: auto;
+        `;
+        if (document.body.classList.contains('dark')) {
+            sortBtn.style.background = isTagSortMode ? '#10b981' : '#404258';
+            sortBtn.style.color = isTagSortMode ? '#fff' : '#d1d5db';
+        }
+        sortBtn.onclick = () => {
+            toggleTagSortMode();
+        };
+        tagsList.appendChild(sortBtn);
+
+        if (isTagSortMode) {
+            initTagSortable();
+        }
+
+        try {
+            localStorage.setItem('tagsHTML', tagsList.innerHTML);
+        } catch (e) {}
+
+        // 显示标签
+        tagsList.classList.add('show');
+
+    } finally {
+        isRenderingTags = false;
     }
-
-    const sortBtn = document.createElement('div');
-    sortBtn.className = 'tag-sort-toggle';
-    sortBtn.innerHTML = isTagSortMode ? '✅ 完成' : '⚙️';
-    sortBtn.title = isTagSortMode ? '完成排序' : '拖拽调整标签顺序';
-    sortBtn.style.cssText = `
-        padding: 4px 10px;
-        border-radius: 6px;
-        background: ${isTagSortMode ? '#10b981' : '#e5e7eb'};
-        color: ${isTagSortMode ? '#fff' : '#4b5563'};
-        font-size: 13px;
-        cursor: pointer;
-        transition: all 0.2s;
-        user-select: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        border: none;
-        margin-left: auto;
-    `;
-    if (document.body.classList.contains('dark')) {
-        sortBtn.style.background = isTagSortMode ? '#10b981' : '#404258';
-        sortBtn.style.color = isTagSortMode ? '#fff' : '#d1d5db';
-    }
-    sortBtn.onclick = () => {
-        toggleTagSortMode();
-    };
-    tagsList.appendChild(sortBtn);
-
-    if (isTagSortMode) {
-        initTagSortable();
-    }
-
-    try {
-        localStorage.setItem('tagsHTML', tagsList.innerHTML);
-    } catch (e) {}
-
-    // 🔥 标记已渲染，显示标签
-    tagsRendered = true;
-    tagsList.classList.add('show');
 }
 
 // ============================================================
