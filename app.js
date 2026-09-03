@@ -2182,7 +2182,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (modalDeleteBtn) modalDeleteBtn.addEventListener('click', deleteSite);
 
     const pasteBtn = document.getElementById('pasteBtn');
-    if (pasteBtn) pasteBtn.addEventListener('click', extractFromClipboard);
+    if (pasteBtn) {
+        pasteBtn.onclick = extractFromClipboard;  // 🔥 addEventListener → onclick
+    }
 
     const modalSiteTags = document.getElementById('modalSiteTags');
     if (modalSiteTags) {
