@@ -1605,9 +1605,13 @@ async function saveSite() {
         closeModal();
         await loadLinks();
     } catch (err) {
-        showToast(err.message);
+        // 🔥 判断是否是重复收藏的错误
+        if (err.message && err.message.includes('UNIQUE constraint failed')) {
+            showToast('您已有该收藏，无须重复收藏！');
+        } else {
+            showToast(err.message);
+        }
     }
-}
 
 async function deleteSite() {
     if (!editingId) return;
