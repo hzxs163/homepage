@@ -1542,7 +1542,6 @@ function syncInputToSelectedTags() {
 // ============================================================
 //  21. 保存 / 删除
 // ============================================================
-
 async function saveSite() {
     const nameInput = document.getElementById('modalSiteName');
     const urlInput = document.getElementById('modalSiteUrl');
@@ -1559,6 +1558,15 @@ async function saveSite() {
     if (!name) { showToast('请输入网站名称'); return; }
     if (!isValidUrl(url)) { showToast('请输入有效的网址'); return; }
 
+    // 🔥 提前检查是否已收藏
+    if (!editingId) {
+        const existing = siteList.find(s => s.url === url);
+        if (existing) {
+            showToast('您已有该收藏，无须重复收藏！');
+            return;
+        }
+    }
+
     const tagsInput = document.getElementById('modalSiteTags');
     if (tagsInput) {
         const val = tagsInput.value;
@@ -1566,16 +1574,12 @@ async function saveSite() {
         selectedTags = parts.filter((t, i, arr) => t && arr.indexOf(t) === i);
     }
 
-    // ============================================================
-    // 🔥 生成 icon_url（从域名提取）
-    // ============================================================
+    // 生成 icon_url
     let iconUrl = '';
     try {
         const u = new URL(url);
         let domain = u.hostname.replace(/^www\./, '');
-        // 去掉端口号
         domain = domain.replace(/:\d+$/, '');
-        // 过滤内网地址
         if (domain && 
             !domain.startsWith('192.168.') && 
             !domain.startsWith('10.') &&
@@ -1589,7 +1593,7 @@ async function saveSite() {
         title: name,
         url,
         icon,
-        icon_url: iconUrl,  // 🔥 新增
+        icon_url: iconUrl,
         tags: selectedTags,
         sort_order: sort
     };
@@ -1605,26 +1609,10 @@ async function saveSite() {
         closeModal();
         await loadLinks();
     } catch (err) {
-        // 🔥 判断是否是重复收藏的错误
-        if (err.message && err.message.includes('UNIQUE constraint failed')) {
-            showToast('您已有该收藏，无须重复收藏！');
-        } else {
-            showToast(err.message);
-        }
-    }
-
-async function deleteSite() {
-    if (!editingId) return;
-    if (!confirm('确定要删除这个网址吗？')) return;
-    try {
-        await API.deleteLink(editingId);
-        showToast('删除成功');
-        closeModal();
-        await loadLinks();
-    } catch (err) {
         showToast(err.message);
     }
 }
+
 
 // ============================================================
 //  22. 剪贴板
