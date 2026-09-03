@@ -1623,7 +1623,8 @@ async function extractFromClipboard() {
         const text = await navigator.clipboard.readText();
         if (!text) { showToast('剪贴板为空'); return; }
         const urls = text.match(/https?:\/\/[^\s]+/gi) || [];
-        const valid = urls.find(u => isValidUrl(u));
+        // 🔥 改这里：只要以 http:// 或 https:// 开头就算有效
+        const valid = urls.find(u => u.startsWith('http://') || u.startsWith('https://'));
         if (!valid) { showToast('未找到有效网址'); return; }
         let name = text.replace(/https?:\/\/[^\s]+/gi, '').trim().replace(/[\n\r]/g, ' ').trim();
         if (!name) {
