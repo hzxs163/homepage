@@ -1525,15 +1525,16 @@ function syncInputToSelectedTags() {
     if (!tagsInput) return;
     const val = tagsInput.value;
 
+    // 分割标签
+    const parts = val.split(',').map(s => s.trim()).filter(s => s);
+    
+    // 🔥 获取最后一个输入的关键词（用于搜索提示）
     const lastComma = val.lastIndexOf(',');
     const keyword = lastComma === -1 ? val.trim() : val.substring(lastComma + 1).trim();
 
-    const parts = val.split(',').map(s => s.trim()).filter(s => s);
-    if (keyword && parts.length > 0 && parts[parts.length - 1] === keyword) {
-        selectedTags = parts.slice(0, -1);
-    } else {
-        selectedTags = parts;
-    }
+    // 🔥 不自动添加标签，只更新 selectedTags 显示
+    // 让用户通过点击已有标签来添加
+    selectedTags = parts;
 
     renderSelectedTags();
     renderExistingTags(keyword);
