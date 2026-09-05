@@ -1426,10 +1426,7 @@ function renderExistingTags(filter = '') {
                 syncSelectedTags();
                 const tagsInput = document.getElementById('modalSiteTags');
                 if (tagsInput) {
-                    tagsInput.value = selectedTags.join(',');
-                    if (selectedTags.length > 0) {
-                        tagsInput.value = selectedTags.join(',') + ',';
-                    }
+                    tagsInput.value = selectedTags.join(',') + ',';
                     tagsInput.dispatchEvent(new Event('input'));
                 }
             }
