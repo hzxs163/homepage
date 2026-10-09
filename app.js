@@ -224,56 +224,119 @@ function writeSnapshot(sort, order, rows, etag) {
   } catch {}
 }
 
+const FIRST_PAGE_SIZE = 32;
+const FILL_PAGE_SIZE = 500;
+let loadGeneration = 0;
+// 内存里是否为完整列表。后台补齐期间只有前面一小截，此时改全局顺序会算出错的落点
+let listComplete = true;
+
+function seedIconCache(rows) {
+  rows.forEach(row => {
+    if (!row.icon_url) return;
+    const key = 'icon_' + row.id;
+    if (!localStorage.getItem(key)) localStorage.setItem(key, row.icon_url);
+  });
+}
+
+// 首屏只取 32 条先渲染，其余在后台分页补齐；本函数返回时列表已是完整的
 async function loadLinks(sort = 'sort_order', order = 'ASC') {
   const status = document.getElementById('syncStatus');
+  const gen = ++loadGeneration;
   const snapshot = readSnapshot(sort, order);
-  linksEtag = snapshot ? snapshot.etag || null : null;
-  let usedCache = false;
+  const hasSnapshot = !!(snapshot && snapshot.rows.length > 0);
+  // 快照存的一定是完整列表；没有快照时手里只有半截，先按不完整处理
+  listComplete = hasSnapshot;
+  // 只有真的用快照渲染过才带上 ETag，否则 304 会让我们手里剩一份空数据
+  linksEtag = hasSnapshot ? snapshot.etag || null : null;
 
-  if (snapshot && snapshot.rows.length > 0) {
+  if (hasSnapshot) {
     siteList = snapshot.rows.map(normalizeRow);
-    usedCache = true;
     hideSkeleton();
     renderAll();
     restoreScrollPosition();
     if (status) status.textContent = '● 更新中...';
   } else {
+    siteList = [];
     showSkeleton();
     if (status) status.textContent = '● 加载中...';
   }
 
   try {
-    const result = await API.getLinks(sort, order, linksEtag);
+    const first = await API.getLinks(sort, order, linksEtag, FIRST_PAGE_SIZE, 0);
+    if (gen !== loadGeneration) return;
 
-    // 服务端确认内容未变：列表保持原样，不重新渲染，也不重写本地快照
-    if (result.notModified) {
-      if (status) status.textContent = usedCache ? '● 云端一致 ✅' : '● 云端模式 ✅';
+    // 全量指纹未变：本地快照本来就是完整的，不必补齐也不必重写
+    if (first.notModified) {
+      if (status) status.textContent = '● 云端一致 ✅';
       return;
     }
-    if (!Array.isArray(result.data)) throw new Error('返回的数据不是数组');
+    if (!Array.isArray(first.data)) throw new Error('返回的数据不是数组');
 
-    linksEtag = result.etag || null;
-    siteList = result.data.map(normalizeRow);
-    result.data.forEach(row => {
-      if (!row.icon_url) return;
-      const key = 'icon_' + row.id;
-      if (!localStorage.getItem(key)) localStorage.setItem(key, row.icon_url);
-    });
-    writeSnapshot(sort, order, result.data, linksEtag);
+    linksEtag = first.etag || null;
+    siteList = first.data.map(normalizeRow);
+    seedIconCache(first.data);
     hideSkeleton();
     renderAll();
     restoreScrollPosition();
+
+    const total = first.total === null ? siteList.length : first.total;
+    listComplete = total <= siteList.length;
+    if (!listComplete) {
+      const done = await fillRemainingPages(sort, order, total, gen);
+      if (!done) return;
+      listComplete = true;
+    }
+    if (gen !== loadGeneration) return;
+
+    writeSnapshot(sort, order, siteList.map(toSnapshotRow), linksEtag);
     if (status) status.textContent = '● 云端模式 ✅';
   } catch (e) {
     console.error('后台更新失败:', e);
-    if (!usedCache) {
+    if (gen !== loadGeneration) return;
+    // 补齐失败时不再拦着用户改顺序：一直锁住比拿着一份可能已经稳定的列表更糟
+    listComplete = true;
+    if (!hasSnapshot) {
       siteList = [];
       hideSkeleton();
       renderAll();
       showToast('加载数据失败，请刷新重试');
     }
-    if (status) status.textContent = usedCache ? '● 缓存模式' : '● 无数据';
+    if (status) status.textContent = hasSnapshot ? '● 缓存模式' : '● 无数据';
   }
+}
+
+// 后台补齐剩余分页；返回 false 表示已被更新的一次加载取代，结果应丢弃
+async function fillRemainingPages(sort, order, total, gen) {
+  const status = document.getElementById('syncStatus');
+  while (siteList.length < total) {
+    const offset = siteList.length;
+    // 补齐请求不能带全量 ETag，否则会被 304 挡回空响应
+    const page = await API.getLinks(sort, order, null, FILL_PAGE_SIZE, offset);
+    if (gen !== loadGeneration) return false;
+    const rows = page.notModified ? [] : page.data;
+    if (!Array.isArray(rows) || rows.length === 0) return true;
+    siteList = siteList.concat(rows.map(normalizeRow));
+    seedIconCache(rows);
+    if (page.total !== null) total = page.total;
+    renderAll();
+    if (status) status.textContent = `● 后台补齐 ${siteList.length}/${total}`;
+    if (rows.length < FILL_PAGE_SIZE) return true;
+  }
+  return true;
+}
+
+// 快照只存渲染必需字段，且仅在拿到完整列表后才写
+function toSnapshotRow(site) {
+  return {
+    id: site.id,
+    title: site.name,
+    url: site.url,
+    icon: site.icon,
+    icon_url: site.icon_url,
+    tags: site.tags,
+    sort_order: site.sort,
+    click_count: site.click_count,
+  };
 }
 window.showToast = showToast;
 let isRenderingTags = !1;
@@ -672,9 +735,11 @@ function renderList() {
   wrap.replaceChildren(fragment);
   attachListSentinel(wrap, filtered.length - visible.length);
   bindCardEvents(wrap);
+  isRendering = false;
+  // 拖拽初始化和图标懒加载等一帧，但渲染状态必须同步释放，
+  // 否则这 50ms 内的后续渲染（如后台补齐）会被整段丢弃
   setTimeout(() => {
     if (!isDragLocked) initSortableDrag();
-    isRendering = false;
     if (pendingIcons.length > 0) startLazyLoad(pendingIcons);
   }, 50);
 }
@@ -865,6 +930,11 @@ function setDragLocked(locked) {
 }
 
 function toggleDragLock() {
+  // 列表补齐到一半时解锁拖拽，会把卡片插进"看不见的邻居"中间，顺序就乱了
+  if (isDragLocked && !listComplete) {
+    showToast('数据还在后台补齐，稍等一下再拖');
+    return;
+  }
   const changed = setDragLocked(!isDragLocked);
   if (changed) showToast(isDragLocked ? '拖拽已锁定' : '拖拽已解锁');
 }

@@ -59,7 +59,12 @@ async function apiCall(method, path, body = null, options = {}) {
   }
 
   if (options.withMeta) {
-    return { notModified: false, data, etag: response.headers.get('ETag') };
+    return {
+      notModified: false,
+      data,
+      etag: response.headers.get('ETag'),
+      total: Number(response.headers.get('X-Links-Total')) || null,
+    };
   }
   return data;
 }
@@ -70,8 +75,11 @@ const API = {
   setTagGrant,
   login: async (username, password) => await apiCall('POST', '/api/auth/login', { username, password }),
 
-  getLinks: async (sort = 'sort_order', order = 'ASC', etag = null) =>
-    await apiCall('GET', `/api/links?sort=${sort}&order=${order}`, null, { withMeta: true, ifNoneMatch: etag }),
+  getLinks: async (sort = 'sort_order', order = 'ASC', etag = null, limit = null, offset = 0) => {
+    let path = `/api/links?sort=${sort}&order=${order}`;
+    if (limit !== null) path += `&limit=${limit}&offset=${offset}`;
+    return await apiCall('GET', path, null, { withMeta: true, ifNoneMatch: etag });
+  },
   addLink: async (link) => await apiCall('POST', '/api/links', link),
   updateLink: async (id, link) => await apiCall('PUT', '/api/links/' + id, link),
   deleteLink: async (id) => await apiCall('DELETE', '/api/links/' + id),

@@ -354,6 +354,8 @@ async function handleSortBatch(request, env, userId) {
 }
 
 const MAX_LINKS_RETURN = 5000;
+const LINKS_DEFAULT_LIMIT = 500;
+const LINKS_MAX_LIMIT = 1000;
 const IMPORT_MAX = 3000;
 const IMPORT_CHUNK = 500;
 
@@ -452,10 +454,30 @@ async function handleGetLinks(request, env, ctx, userId) {
         }
 
         const outHeaders = { ETag: etag, 'X-Links-Cache': cacheState };
+
+        // 整份列表只缓存一份，分页只是它的切片：ETag 始终代表全量，
+        // 因此客户端拿"全量 ETag"复验命中 304 时，等价于"整份都没变"，可继续用本地完整快照
         if (etagMatches(request.headers.get('If-None-Match'), etag)) {
             return new Response(null, { status: 304, headers: { ...outHeaders, 'Cache-Control': 'private, no-store' } });
         }
-        return new Response(body, {
+
+        let payloadBody = body;
+        if (url.searchParams.get('limit') !== null || url.searchParams.get('offset') !== null) {
+            const limit = Math.max(1, Math.min(Number(url.searchParams.get('limit')) || LINKS_DEFAULT_LIMIT, LINKS_MAX_LIMIT));
+            const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0);
+            let rows;
+            try {
+                rows = JSON.parse(body);
+            } catch {
+                rows = [];
+            }
+            payloadBody = JSON.stringify(rows.slice(offset, offset + limit));
+            outHeaders['X-Links-Total'] = String(rows.length);
+            outHeaders['X-Links-Offset'] = String(offset);
+            outHeaders['X-Links-Limit'] = String(limit);
+        }
+
+        return new Response(payloadBody, {
             status: 200,
             headers: { ...outHeaders, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, no-store' },
         });
