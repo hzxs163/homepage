@@ -354,11 +354,22 @@ async function handleSortBatch(request, env, userId) {
 const MAX_LINKS_RETURN = 5000;
 
 // 列表接口专用响应：带内容指纹，客户端可带 If-None-Match 换取 304 空响应
+
+// Cloudflare 边缘会把 ETag 改写成弱校验器（W/"..."），浏览器原样回传；
+// 逐字符全等比较会永远失配，必须按 HTTP 语义剥离 W/ 并支持逗号列表与 *
+function etagMatches(header, etag) {
+    if (!header) return false;
+    const strip = v => String(v).trim().replace(/^W\//i, '');
+    const target = strip(etag);
+    if (header.trim() === '*') return true;
+    return header.split(',').some(value => strip(value) === target);
+}
+
 async function jsonWithEtag(request, data) {
     const body = JSON.stringify(data);
     const etag = '"sha256-' + (await sha256Hex(body)).slice(0, 32) + '"';
     const headers = { ETag: etag, 'Cache-Control': 'private, no-store' };
-    if (request.headers.get('If-None-Match') === etag) {
+    if (etagMatches(request.headers.get('If-None-Match'), etag)) {
         return new Response(null, { status: 304, headers });
     }
     headers['Content-Type'] = 'application/json; charset=utf-8';
