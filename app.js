@@ -846,8 +846,9 @@ function clearSearch() {
     t = document.getElementById("clearSearchBtn");
   (e && (e.value = ""), t && t.classList.add("hidden"), renderList());
 }
-function toggleDragLock() {
-  isDragLocked = !isDragLocked;
+function setDragLocked(locked) {
+  if (isDragLocked === locked) return false;
+  isDragLocked = locked;
   const btn = document.getElementById('dragLockBtn');
   if (btn) {
     btn.textContent = isDragLocked ? '🔒' : '🔓';
@@ -860,7 +861,12 @@ function toggleDragLock() {
   // 解锁后需要完整列表才能把卡片拖到任意位置；重新锁定后收回首屏窗口
   if (isDragLocked) renderLimit = RENDER_FIRST_CHUNK;
   renderList();
-  showToast(isDragLocked ? '拖拽已锁定' : '拖拽已解锁');
+  return true;
+}
+
+function toggleDragLock() {
+  const changed = setDragLocked(!isDragLocked);
+  if (changed) showToast(isDragLocked ? '拖拽已锁定' : '拖拽已解锁');
 }
 const SORT_STEP = 10;
 const SORT_MIN_GAP = 1e-6;
@@ -1409,6 +1415,7 @@ async function initApp() {
     lockBtn.classList.add('locked');
   }
   initKeyboardShortcuts();
+  initAutoLock();
 }
 ((window.initApp = initApp),
   document.addEventListener("DOMContentLoaded", function () {
@@ -1747,6 +1754,51 @@ function clearTagUnlocks() {
   invalidateListCache();
 }
 
+// ============================================================
+//  自动锁：闲置超时后收回标签密码解锁态与拖拽解锁
+// ============================================================
+const AUTO_LOCK_MS = 5 * 60 * 1000;
+const AUTO_LOCK_CHECK_MS = 15 * 1000;
+let lastActivityAt = Date.now();
+let autoLockTimer = null;
+
+function markActivity() {
+  lastActivityAt = Date.now();
+}
+
+// 由闲置轮询调用；测试里也可以直接调用
+function applyIdleLock() {
+  if (Date.now() - lastActivityAt < AUTO_LOCK_MS) return false;
+
+  const hadUnlockedTags = getUnlockedTags().length > 0;
+  const wasDragUnlocked = !isDragLocked;
+  if (!hadUnlockedTags && !wasDragUnlocked) {
+    lastActivityAt = Date.now();
+    return false;
+  }
+
+  if (hadUnlockedTags) clearTagUnlocks();
+  setDragLocked(true);
+  lastActivityAt = Date.now();
+  showToast('超过 5 分钟无操作，已自动锁定');
+  if (hadUnlockedTags) {
+    // 私密链接仍在内存里，必须重新向服务端要一份过滤后的数据
+    const [sort, order] = currentSort();
+    loadLinks(sort, order);
+  }
+  return true;
+}
+
+function initAutoLock() {
+  ['mousedown', 'keydown', 'touchstart', 'wheel', 'scroll'].forEach(type =>
+    document.addEventListener(type, markActivity, { passive: true, capture: true })
+  );
+  window.addEventListener('focus', markActivity);
+  markActivity();
+  if (autoLockTimer) clearInterval(autoLockTimer);
+  autoLockTimer = setInterval(applyIdleLock, AUTO_LOCK_CHECK_MS);
+}
+
 async function setTagPassword(tagName, password) {
   await API.setTagPassword(tagName, password || '');
   clearTagUnlocks();
@@ -1769,6 +1821,9 @@ function currentSort() {
 }
 
 function selectTag(tag) {
+  const previous = activeTag;
+  const unlocked = getUnlockedTags();
+
   document.querySelectorAll('.tag-item').forEach(el => {
     el.classList.remove('active');
     if (el.dataset.tag === tag) el.classList.add('active');
@@ -1779,6 +1834,16 @@ function selectTag(tag) {
     const wrap = document.getElementById('tagsFilterWrap');
     if (wrap) wrap.classList.remove('expanded');
   }
+
+  // 切换标签即收回解锁态：私密链接此刻还留在内存与快照里，必须作废并重新拉取
+  if (previous !== tag && unlocked.length > 0 && !unlocked.includes(tag)) {
+    clearTagUnlocks();
+    showToast('已离开解锁的标签，重新锁定');
+    const [sort, order] = currentSort();
+    loadLinks(sort, order);
+    return;
+  }
+
   renderList();
 }
 
