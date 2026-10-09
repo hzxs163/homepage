@@ -141,7 +141,8 @@ async function verifyPassword(password, stored) {
 
 // ---------- 标签密码（服务端加盐哈希 + 短期解锁凭证） ----------
 const GRANT_HEADER = 'X-Tag-Grant';
-const GRANT_TTL_MS = 12 * 60 * 60 * 1000;
+// 凭证外泄后的可用窗口。前端闲置 5 分钟就会自动收回，所以这里不需要长
+const GRANT_TTL_MS = 30 * 60 * 1000;
 
 function parseTags(raw) {
     if (!raw) return [];
