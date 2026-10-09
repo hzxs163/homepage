@@ -724,6 +724,29 @@ body.dark .toast {
   opacity: 1;
   transform: translate(0);
 }
+.sync-status {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  z-index: 9000;
+  display: none;
+  pointer-events: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #e8f8f0;
+  background: #ffffffd9;
+  color: #6b7280;
+  font-size: 12px;
+  pointer-events: none;
+}
+.sync-status:not(:empty) {
+  display: block;
+}
+body.dark .sync-status {
+  border-color: #404258;
+  background: #242535d9;
+  color: #9ca3af;
+}
 .modal-mask {
   position: fixed;
   top: 0;

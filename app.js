@@ -282,6 +282,7 @@ async function loadLinks(sort = 'sort_order', order = 'ASC') {
     const total = first.total === null ? siteList.length : first.total;
     listComplete = total <= siteList.length;
     if (!listComplete) {
+      if (status) status.textContent = `● 后台补齐 ${siteList.length}/${total}`;
       const done = await fillRemainingPages(sort, order, total, gen);
       if (!done) return;
       listComplete = true;
