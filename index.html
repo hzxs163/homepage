@@ -8,12 +8,10 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://www.google.com">
 <script defer src="Sortable.min.js"></script>
-<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/style.css?v=20261009">
 </head>
 <body>
-<script>try{if(localStorage.getItem('darkTheme')==='true')document.body.classList.add('dark');}catch(e){}
-// 清除旧的第三方图标缓存（favicon.im 等），统一走 /api/favicon 代理
-try{for(const k of Object.keys(localStorage)){if(k.startsWith('icon_')&&!localStorage.getItem(k).startsWith('/api/favicon'))localStorage.removeItem(k);}}catch(e){}</script>
+<script src="/boot.js"></script>
 <div class="container" id="app">
 
 <!-- ==================== 登录页 ==================== -->
@@ -131,7 +129,7 @@ try{for(const k of Object.keys(localStorage)){if(k.startsWith('icon_')&&!localSt
             <div class="form-item">
                 <label>网站地址</label>
                 <input type="text" id="modalSiteUrl" placeholder="例如：https://www.example.com">
-                <button class="paste-btn" id="pasteBtn" onclick="extractFromClipboard()">📋 从剪贴板识别填充</button>
+                <button class="paste-btn" id="pasteBtn">📋 从剪贴板识别填充</button>
             </div>
             <div class="form-item">
                 <label>图标符号（可选）</label>
@@ -139,7 +137,7 @@ try{for(const k of Object.keys(localStorage)){if(k.startsWith('icon_')&&!localSt
             </div>
             <div class="form-item">
                 <label>网站标签</label>
-                <input type="text" id="modalSiteTags" placeholder="例如：福利,论坛,资源" oninput="syncInputToSelectedTags()">
+                <input type="text" id="modalSiteTags" placeholder="例如：福利,论坛,资源">
                 <div class="tags-select-wrap">
                     <div class="existing-tags-list" id="existingTagsList"></div>
                     <div class="selected-tags-list" id="selectedTagsList"></div>
@@ -255,9 +253,9 @@ try{for(const k of Object.keys(localStorage)){if(k.startsWith('icon_')&&!localSt
 <!-- ==================== Toast提示 ==================== -->
 <div class="toast" id="toast"></div>
 
-<script defer src="/api.js"></script>
-<script defer src="/auth.js"></script>
-<script defer src="/app.js?v=20260926"></script>
-<script defer src="/admin.js"></script>
+<script defer src="/api.js?v=20261009"></script>
+<script defer src="/auth.js?v=20261009"></script>
+<script defer src="/app.js?v=20261009"></script>
+<script defer src="/admin.js?v=20261009"></script>
 </body>
 </html>

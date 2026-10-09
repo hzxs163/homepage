@@ -21,14 +21,14 @@
 
 | 特性 | 说明 |
 |------|------|
-| 🔐 **多用户支持** | 每个用户独立账号与数据空间，数据按用户隔离 |
+| 🔐 **多用户支持** | 每个用户独立账号与数据空间，数据按用户隔离；账号由管理员创建 |
 | ☁️ **云端存储** | 数据保存在 Cloudflare D1 数据库，换设备不丢失 |
 | 📱 **响应式设计** | 完美适配 PC、平板、手机 |
 | 🌍 **边缘部署** | 基于 Cloudflare 全球边缘网络，访问快速 |
 | 🎨 **暗黑模式** | 一键切换亮/暗主题，状态记忆 |
 | 🔍 **智能搜索** | 按名称、URL、标签实时过滤（Ctrl+K 聚焦） |
 | 🖼️ **favicon 代理** | 自带图标代理，CDN 缓存 30 天，懒加载并发拉取 |
-| 🔒 **标签密码** | 给标签设置密码，私密链接需解锁可见 |
+| 🔒 **标签密码** | 给标签设置密码，私密链接**由服务端过滤后再返回**，需解锁才可见 |
 | 🔢 **标签数值排序** | 给标签配置排序数字，顺序固定不再被使用次数打乱 |
 | ⚡ **边缘测速** | 由边缘网络测网站可达性与响应时间 |
 | 📦 **批量操作** | JSON 一键导入/导出，方便迁移备份 |
@@ -54,7 +54,7 @@ Cloudflare D1 (SQLite)  ← 绑定为 env.DB
 
 - **后端**：Cloudflare Pages Functions（无需单独 Worker，随 Pages 一起部署）
 - **数据库**：Cloudflare D1 (SQLite)，参数化查询防注入
-- **认证**：JWT（HMAC-SHA256 签名，`JWT_SECRET` 签发）+ PBKDF2-SHA256 密码哈希（10 万次迭代）
+- **认证**：JWT（HMAC-SHA256 签名，必须由 `JWT_SECRET` 环境变量签发；未配置时接口直接失败，不使用任何兜底密钥）+ PBKDF2-SHA256 密码哈希（10 万次迭代）
 - **缓存**：浏览器 localStorage 图标缓存 + favicon CDN 缓存 30 天 + PWA Service Worker 离线缓存
 
 ---
@@ -66,6 +66,7 @@ Cloudflare D1 (SQLite)  ← 绑定为 env.DB
 ```
 homepage/
 ├── index.html           # 前端页面
+├── boot.js              # 首屏前置脚本（主题/旧缓存清理，独立文件以便 CSP 去掉 unsafe-inline）
 ├── app.js               # 主应用逻辑
 ├── api.js               # API 调用封装
 ├── auth.js              # 登录/登出
@@ -138,6 +139,8 @@ CREATE INDEX IF NOT EXISTS idx_tp_user ON tag_passwords(user_id);
 INSERT OR IGNORE INTO users (username, password, role) VALUES ('admin', 'admin123', 'admin');
 ```
 
+> ⚠️ 上面的默认口令 `admin123` 是**公开写在文档里的**，任何知道你的部署地址的人都能以此为管理员登录。部署完成后请立刻按"使用指南 → 管理员操作"改掉它，或直接在这条 INSERT 里换成你自己的强口令。
+
 > 说明：`users.username` 的 `UNIQUE` 约束自带索引；`tag_orders.user_id` 为主键自带索引，无需额外创建。
 
 #### 第二步：创建 Pages 项目并部署
@@ -163,9 +166,9 @@ Pages 项目 → **设置** → **环境变量** → 添加：
 | 变量名 | 必填 | 说明 |
 |--------|------|------|
 | `DB` | 是 | D1 数据库绑定（见上一步） |
-| `JWT_SECRET` | **是** | JWT 签名密钥，任意长随机字符串（如 `openssl rand -hex 32` 生成），用于签发登录 Token。修改后所有已登录用户需重新登录 |
+| `JWT_SECRET` | **是** | JWT 签名密钥，**长度至少 32 字符**（如 `openssl rand -hex 32`）。未配置或过短时，登录与所有鉴权接口一律失败（不存在兜底密钥）。修改后所有已登录用户需重新登录 |
 
-> ⚠️ **`JWT_SECRET` 必须配置**，否则登录接口无法签发 Token。
+> ⚠️ **`JWT_SECRET` 必须配置**。代码中不再保留任何默认密钥，缺少该变量时签发 token 会直接返回 500、校验 token 会直接返回 401。
 
 #### 第五步：访问
 
@@ -175,7 +178,14 @@ Pages 项目 → **设置** → **环境变量** → 添加：
 |------|------|------|
 | `admin` | `admin123` | 管理员 |
 
-**首次登录后请立即修改管理员密码**（管理面板 → 重置密码）。
+**首次登录后请立即修改管理员密码。** 注意：管理面板的"重置密码"按钮调用的 `PUT /api/admin/users/:name` 后端尚未实现（返回 405），当前请直接在 D1 控制台执行：
+
+```sql
+-- 把 admin 的密码改成一个强口令（此处填 pbkdf2 哈希，或先置为已知明文、登录后由系统自动升级）
+UPDATE users SET password = '你的新密码明文' WHERE username = 'admin';
+```
+
+用明文更新后，第一次登录成功时系统会自动把它升级为 PBKDF2 哈希。
 
 ---
 
@@ -214,13 +224,13 @@ Pages 项目 → **设置** → **环境变量** → 添加：
 
 | 接口 | 方法 | 说明 |
 |------|------|------|
-| `/api/auth/login` | POST | 登录，body: `{username, password}`，返回 JWT |
+| `/api/auth/login` | POST | 登录，body: `{username, password}`，返回 JWT。**用户名不存在时返回 401，不再自动建号**；连续失败会触发 429 |
 
 ### 链接管理
 
 | 接口 | 方法 | 说明 |
 |------|------|------|
-| `/api/links` | GET | 获取当前用户所有链接（`?sort=sort_order&order=ASC`） |
+| `/api/links` | GET | 获取当前用户链接（`?sort=sort_order&order=ASC`）。**未携带有效 `X-Tag-Grant` 时，被密码保护的标签下的链接由服务端剔除后返回** |
 | `/api/links` | POST | 添加链接 |
 | `/api/links/:id` | PUT | 更新链接 |
 | `/api/links/:id` | DELETE | 删除链接 |
@@ -240,9 +250,12 @@ Pages 项目 → **设置** → **环境变量** → 添加：
 
 | 接口 | 方法 | 说明 |
 |------|------|------|
-| `/api/tag-passwords` | GET | 获取当前用户全部标签密码哈希 |
-| `/api/tag-passwords` | POST | 批量保存标签密码，body: `{passwords: {标签名: sha256哈希}}` |
+| `/api/tag-passwords` | GET | 返回当前用户哪些标签被锁：`[{tag_name, locked: true}]`，**不含任何哈希** |
+| `/api/tag-passwords` | POST | 设置/清除单个标签密码，body: `{tag, password}`；`password` 为空字符串即解除。服务端做加盐 PBKDF2 存储 |
+| `/api/tag-passwords/unlock` | POST | 校验标签密码，body: `{tag, password}`，成功返回 `{grant, tags}`；客户端把 `grant` 存进 sessionStorage 并在后续请求用 `X-Tag-Grant` 头上行 |
 | `/api/tag-passwords/:name` | DELETE | 删除指定标签密码 |
+
+> 兼容说明：历史数据里由浏览器计算的无盐 SHA-256 记录仍可被原密码解锁，解锁成功后会自动升级为服务端加盐哈希。
 
 ### 工具接口
 
@@ -266,13 +279,22 @@ Pages 项目 → **设置** → **环境变量** → 添加：
 
 | 措施 | 说明 |
 |------|------|
-| JWT 认证 | Token 使用 `JWT_SECRET` 做 HMAC-SHA256 签名，防伪造 |
-| 密码哈希 | PBKDF2-SHA256，10 万次迭代；旧明文密码首次登录自动升级为哈希 |
+| JWT 认证 | Token 使用 `JWT_SECRET` 做 HMAC-SHA256 签名；**未配置或长度不足 32 字符时，签发与校验一律失败**，不存在兜底密钥 |
+| 账号创建 | `/api/auth/login` 只做认证，**不会自动注册**；新账号只能由管理员通过 `/api/admin/users` 创建 |
+| 登录限流 | 同一 `IP + 用户名` 在 10 分钟内失败 8 次后返回 429；用户名不存在与密码错误返回同一句提示，不泄露账号是否存在 |
+| 密码哈希 | PBKDF2-SHA256，10 万次迭代，每账号独立随机盐；旧明文密码首次登录自动升级为哈希 |
+| 标签密码 | 密码明文只在提交时经过 TLS，**服务端加盐 PBKDF2 存储**；`GET /api/tag-passwords` 只返回哪些标签被锁，不再下发任何哈希；被锁标签下的链接**在服务端就被过滤，不会出现在 `/api/links` 响应里** |
+| 标签解锁凭证 | 服务端签发 12 小时有效的 `tag-grant`，浏览器用 `X-Tag-Grant` 请求头上行；凭证与 `userId` 绑定，无法跨账号复用 |
+| XSS 防护 | 所有用户可控内容（标题 / URL / 标签 / 图标 / 用户名）一律走 `textContent` 与 `addEventListener`，不再拼进 HTML 或 JS 字符串；CSP 的 `script-src` 已移除 `'unsafe-inline'` |
 | 数据隔离 | 所有查询强制带 `user_id`，用户只能访问自己的数据 |
 | SQL 注入防护 | 全部使用 D1 参数化查询（`prepare` + `bind`） |
 | favicon 防 SSRF | `isInternalHost` 过滤内网 IP、localhost、保留网段 |
 | 安全响应头 | `_headers` 配置 CSP、X-Frame-Options、nosniff 等 |
 | 管理员权限 | 普通用户无法访问 `/api/admin/*` |
+
+> ⚠️ 已知未修复项：`PUT /api/admin/users/:name`（重置密码）与 `DELETE /api/admin/users/:name`（删除用户）后端路由未实现，会返回 405；`POST /api/links/:id/click`、`/api/links/:id/icon` 同样不存在，因此 `click_count` 恒为 0，界面上的"点击量"排序当前无效。
+
+> ⚠️ `links.url` 上有 `UNIQUE` 索引且**跨用户生效**，第二个用户无法收藏与他人相同的网址。修复方式：`DROP INDEX idx_unique_url; CREATE UNIQUE INDEX idx_unique_url ON links(user_id, url);`
 
 ---
 
@@ -286,9 +308,9 @@ Pages 项目 → **设置** → **环境变量** → 添加：
 
 ### 2. 更新代码后页面还是旧版？
 
-**原因**：Service Worker 缓存了旧资源。
+应用脚本与样式在 `_headers` 里统一为 `Cache-Control: no-cache`（每次回源校验），部署后刷新即可拿到新版本；`index.html` 另外带 `?v=` 版本号做兜底。
 
-**解决**：连续强制刷新两次（间隔几秒），让新版 Service Worker 接管；项目已采用"静态资源网络优先"策略，更新后会立即生效。
+> 说明：仓库里的 `sw.js` 目前**没有被注册**（全站无 `serviceWorker.register`），所以离线缓存与"强刷两次清 SW 缓存"都不适用于当前部署。
 
 ### 3. 图标不显示 / 显示首字母？
 

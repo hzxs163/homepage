@@ -51,8 +51,15 @@ function b64urlDecode(str) {
     return bytes;
 }
 
+// 缺失或过短的密钥一律拒绝签发/校验，避免仓库里的兜底常量被当作真实密钥使用
+function getJwtSecret(env) {
+    const secret = env.JWT_SECRET;
+    return typeof secret === 'string' && secret.length >= 32 ? secret : null;
+}
+
 async function getHmacKey(env) {
-    const secret = env.JWT_SECRET || 'insecure-default-change-me-via-pages-dashboard';
+    const secret = getJwtSecret(env);
+    if (!secret) throw new Error('JWT_SECRET 未配置或长度不足 32 字符');
     return crypto.subtle.importKey(
         'raw',
         new TextEncoder().encode(secret),
@@ -70,6 +77,7 @@ async function signToken(payload, env) {
 
 async function verifyToken(token, env) {
     if (!token || token.indexOf('.') === -1) return null;
+    if (!getJwtSecret(env)) return null;
     const parts = token.split('.');
     if (parts.length !== 2) return null;
     try {
@@ -131,41 +139,150 @@ async function verifyPassword(password, stored) {
     return stored === password;
 }
 
+// ---------- 标签密码（服务端加盐哈希 + 短期解锁凭证） ----------
+const GRANT_HEADER = 'X-Tag-Grant';
+const GRANT_TTL_MS = 12 * 60 * 60 * 1000;
+
+function parseTags(raw) {
+    if (!raw) return [];
+    try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.filter(t => typeof t === 'string' && t) : [];
+    } catch {
+        return [];
+    }
+}
+
+async function sha256Hex(text) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// 校验浏览器旧版本提交的无盐 SHA-256，通过后由调用方升级为服务端加盐哈希
+async function verifyTagPassword(password, stored) {
+    if (!stored) return { ok: false, needsUpgrade: false };
+    if (stored.startsWith('pbkdf2$')) {
+        const parts = stored.split('$');
+        if (parts.length !== 3) return { ok: false, needsUpgrade: false };
+        try {
+            const salt = b64urlDecode(parts[1]);
+            const keyMaterial = await crypto.subtle.importKey(
+                'raw', new TextEncoder().encode(password), { name: 'PBKDF2' }, false, ['deriveBits']
+            );
+            const bits = await crypto.subtle.deriveBits(
+                { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, keyMaterial, 256
+            );
+            return { ok: b64urlEncode(bits) === parts[2], needsUpgrade: false };
+        } catch {
+            return { ok: false, needsUpgrade: false };
+        }
+    }
+    if (/^[0-9a-f]{64}$/i.test(stored)) {
+        const ok = (await sha256Hex(password)) === stored;
+        return { ok, needsUpgrade: ok };
+    }
+    return { ok: false, needsUpgrade: false };
+}
+
+async function getLockedTagNames(env, userId) {
+    const rows = await env.DB.prepare('SELECT tag_name FROM tag_passwords WHERE user_id = ?').bind(userId).all();
+    return rows.results.map(r => r.tag_name);
+}
+
+async function signGrant(userId, tags, env) {
+    return signToken({
+        kind: 'tag-grant',
+        userId,
+        tags,
+        exp: Date.now() + GRANT_TTL_MS
+    }, env);
+}
+
+async function readTagGrant(request, env, userId) {
+    const raw = request.headers.get(GRANT_HEADER);
+    if (!raw) return new Set();
+    const payload = await verifyToken(raw, env);
+    if (!payload || payload.kind !== 'tag-grant' || payload.userId !== userId) return new Set();
+    return new Set(Array.isArray(payload.tags) ? payload.tags : []);
+}
+
 // ============================================================
 //  登录接口
 // ============================================================
+const LOGIN_MAX_FAILURES = 8;
+const LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const LOGIN_TRACKER_MAX = 5000;
+
+// 计数保存在 isolate 内存中，只能抑制单实例上的暴力尝试，不是分布式限流。
+// 需要更强保证时应接入 Turnstile。
+const loginFailures = new Map();
+
+function clientIp(request) {
+    return (request.cf && request.cf.clientIp) || request.headers.get('CF-Connecting-IP') || 'unknown';
+}
+
+function loginThrottleKey(request, username) {
+    return clientIp(request) + '|' + username.toLowerCase();
+}
+
+function isLoginThrottled(key, now) {
+    const entry = loginFailures.get(key);
+    if (!entry) return false;
+    if (now - entry.firstAt > LOGIN_WINDOW_MS) {
+        loginFailures.delete(key);
+        return false;
+    }
+    return entry.count >= LOGIN_MAX_FAILURES;
+}
+
+function recordLoginFailure(key, now) {
+    if (loginFailures.size > LOGIN_TRACKER_MAX) {
+        for (const [k, v] of loginFailures) {
+            if (now - v.firstAt > LOGIN_WINDOW_MS) loginFailures.delete(k);
+        }
+    }
+    const entry = loginFailures.get(key);
+    if (entry && now - entry.firstAt <= LOGIN_WINDOW_MS) entry.count++;
+    else loginFailures.set(key, { firstAt: now, count: 1 });
+}
+
 async function handleLogin(request, env) {
+    let body;
     try {
-        const { username, password } = await request.json();
-        if (!username || !password) return errorResponse('用户名和密码不能为空');
+        body = await request.json();
+    } catch {
+        return errorResponse('请求体必须是合法 JSON', 400);
+    }
+    const username = typeof body.username === 'string' ? body.username.trim() : '';
+    const password = typeof body.password === 'string' ? body.password : '';
+    if (!username || !password) return errorResponse('用户名和密码不能为空', 400);
 
+    const now = Date.now();
+    const key = loginThrottleKey(request, username);
+    if (isLoginThrottled(key, now)) return errorResponse('尝试次数过多，请稍后再试', 429);
+
+    try {
+        // 账号只能由管理员在后台创建，未知用户名不再自动注册
         const user = await env.DB.prepare('SELECT * FROM users WHERE username = ?').bind(username).first();
-
-        // 新用户：注册，存密码哈希
         if (!user) {
-            const hash = await hashPassword(password);
-            const result = await env.DB.prepare(
-                'INSERT INTO users (username, password, role) VALUES (?, ?, ?)'
-            ).bind(username, hash, 'user').run();
-            const newUser = { id: result.meta.last_row_id, username, role: 'user' };
-            const token = await signToken({
-                userId: newUser.id,
-                username: newUser.username,
-                role: newUser.role,
-                exp: Date.now() + 7 * 24 * 60 * 60 * 1000
-            }, env);
-            return jsonResponse({ token, user: newUser });
+            recordLoginFailure(key, Date.now());
+            return errorResponse('用户名或密码错误', 401);
         }
 
-        // 老用户：验证密码（兼容旧明文，成功后自动升级）
         const ok = await verifyPassword(password, user.password);
-        if (!ok) return errorResponse('密码错误', 401);
+        if (!ok) {
+            recordLoginFailure(key, Date.now());
+            return errorResponse('用户名或密码错误', 401);
+        }
+        loginFailures.delete(key);
 
         // 明文自动升级为 PBKDF2
         if (!user.password.startsWith('pbkdf2$')) {
             const newHash = await hashPassword(password);
             await env.DB.prepare('UPDATE users SET password = ? WHERE id = ?').bind(newHash, user.id).run();
         }
+
+        if (!getJwtSecret(env)) return errorResponse('服务器未配置 JWT_SECRET', 500);
 
         const userInfo = { id: user.id, username: user.username, role: user.role };
         const token = await signToken({
@@ -210,7 +327,17 @@ async function handleGetLinks(request, env, userId) {
         const finalOrder = order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
         const sql = `SELECT * FROM links WHERE user_id = ? ORDER BY ${finalSortBy} ${finalOrder} LIMIT ${MAX_LINKS_RETURN}`;
         const links = await env.DB.prepare(sql).bind(userId).all();
-        return jsonResponse(links.results);
+
+        // 私密标签在返回给浏览器之前就被剔除，链接内容不会离开服务端
+        const lockedTags = await getLockedTagNames(env, userId);
+        if (lockedTags.length === 0) return jsonResponse(links.results);
+
+        const unlocked = await readTagGrant(request, env, userId);
+        const visible = links.results.filter(row => {
+            const tags = parseTags(row.tags);
+            return !tags.some(tag => lockedTags.includes(tag) && !unlocked.has(tag));
+        });
+        return jsonResponse(visible);
     } catch (e) {
         console.error('getLinks failed', e);
         return errorResponse('获取链接失败', 500);
@@ -396,28 +523,79 @@ async function handlePostTagOrder(request, env, userId) {
 
 async function handleGetTagPasswords(env, userId) {
     try {
-        const results = await env.DB.prepare('SELECT tag_name, password_hash FROM tag_passwords WHERE user_id = ?').bind(userId).all();
-        return jsonResponse(results.results);
+        // 只告知哪些标签上了锁，不下发任何可用于离线爆破的哈希
+        const results = await env.DB.prepare('SELECT tag_name FROM tag_passwords WHERE user_id = ?').bind(userId).all();
+        return jsonResponse(results.results.map(r => ({ tag_name: r.tag_name, locked: true })));
     } catch (e) {
         console.error('getTagPasswords failed', e);
         return errorResponse('加载密码失败', 500);
     }
 }
 
-async function handlePostTagPasswords(request, env, userId) {
+async function handleSetTagPassword(request, env, userId) {
+    let body;
     try {
-        const { passwords } = await request.json();
-        await env.DB.prepare('DELETE FROM tag_passwords WHERE user_id = ?').bind(userId).run();
-        for (const [tagName, hash] of Object.entries(passwords)) {
-            if (hash && hash.trim() !== '') {
-                await env.DB.prepare('INSERT INTO tag_passwords (tag_name, password_hash, user_id) VALUES (?, ?, ?)')
-                    .bind(tagName, hash, userId).run();
-            }
+        body = await request.json();
+    } catch {
+        return errorResponse('请求体必须是合法 JSON', 400);
+    }
+    const tagName = typeof body.tag === 'string' ? body.tag.trim() : '';
+    const password = typeof body.password === 'string' ? body.password.trim() : '';
+    if (!tagName || tagName.length > 100) return errorResponse('标签名不合法', 400);
+
+    try {
+        if (password === '') {
+            await env.DB.prepare('DELETE FROM tag_passwords WHERE tag_name = ? AND user_id = ?')
+                .bind(tagName, userId).run();
+            return jsonResponse({ success: true, cleared: true });
         }
+        if (password.length < 4) return errorResponse('密码至少 4 位', 400);
+        const hash = await hashPassword(password);
+        // 单个标签单独更新，避免"覆盖式全量保存"误删其它标签的密码
+        await env.DB.prepare(
+            `INSERT INTO tag_passwords (tag_name, password_hash, user_id) VALUES (?, ?, ?)
+             ON CONFLICT(tag_name, user_id) DO UPDATE SET password_hash = excluded.password_hash`
+        ).bind(tagName, hash, userId).run();
         return jsonResponse({ success: true });
     } catch (e) {
-        console.error('postTagPasswords failed', e);
+        console.error('setTagPassword failed', e);
         return errorResponse('保存密码失败', 500);
+    }
+}
+
+async function handleUnlockTag(request, env, userId) {
+    let body;
+    try {
+        body = await request.json();
+    } catch {
+        return errorResponse('请求体必须是合法 JSON', 400);
+    }
+    const tag = typeof body.tag === 'string' ? body.tag : '';
+    const password = typeof body.password === 'string' ? body.password : '';
+    if (!tag || !password) return errorResponse('标签和密码不能为空', 400);
+
+    try {
+        const row = await env.DB
+            .prepare('SELECT password_hash FROM tag_passwords WHERE tag_name = ? AND user_id = ?')
+            .bind(tag, userId).first();
+        if (!row) return errorResponse('该标签未设置密码', 404);
+
+        const { ok, needsUpgrade } = await verifyTagPassword(password, row.password_hash);
+        if (!ok) return errorResponse('密码错误', 401);
+
+        if (needsUpgrade) {
+            await env.DB.prepare('UPDATE tag_passwords SET password_hash = ? WHERE tag_name = ? AND user_id = ?')
+                .bind(await hashPassword(password), tag, userId).run();
+        }
+
+        const alreadyUnlocked = await readTagGrant(request, env, userId);
+        const lockedTags = await getLockedTagNames(env, userId);
+        const tags = [...new Set(lockedTags.filter(t => t === tag || alreadyUnlocked.has(t)))];
+        const grant = await signGrant(userId, tags, env);
+        return jsonResponse({ grant, tags });
+    } catch (e) {
+        console.error('unlockTag failed', e);
+        return errorResponse('解锁失败', 500);
     }
 }
 
@@ -604,8 +782,9 @@ export async function onRequest(context) {
         if (path === '/api/tags/order' && method === 'GET') return handleGetTagOrder(env, userId);
         if (path === '/api/tags/order' && method === 'POST') return handlePostTagOrder(request, env, userId);
         if (path === '/api/tag-passwords' && method === 'GET') return handleGetTagPasswords(env, userId);
-        if (path === '/api/tag-passwords' && method === 'POST') return handlePostTagPasswords(request, env, userId);
-        if (path.match(/^\/api\/tag-passwords\/.+/)) return handleDeleteTagPassword(request, env, userId, path.replace('/api/tag-passwords/', ''));
+        if (path === '/api/tag-passwords' && method === 'POST') return handleSetTagPassword(request, env, userId);
+        if (path === '/api/tag-passwords/unlock' && method === 'POST') return handleUnlockTag(request, env, userId);
+        if (path.match(/^\/api\/tag-passwords\/.+/) && method === 'DELETE') return handleDeleteTagPassword(request, env, userId, path.replace('/api/tag-passwords/', ''));
         if (path.startsWith('/api/admin/users')) return handleAdminUsers(request, env, userId, userRole);
 
         return errorResponse('接口不存在', 404);

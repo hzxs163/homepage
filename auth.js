@@ -1,1 +1,80 @@
-"undefined"==typeof showToast&&(window.showToast=function(e){alert(e)}),"undefined"==typeof API&&(window.API={async login(e,t){const n=JSON.parse(localStorage.getItem("_users")||"[]");let o=n.find(t=>t.username===e);if(!o){const o={username:e,password:t,role:"user"};return n.push(o),localStorage.setItem("_users",JSON.stringify(n)),{token:"mock-token-"+Date.now(),user:{username:e,role:"user"}}}if(o.password!==t)throw new Error("密码错误");return{token:"mock-token-"+Date.now(),user:{username:o.username,role:o.role}}}});let authUser=null;async function doLogin(){const e=document.getElementById("loginUsername").value.trim(),t=document.getElementById("loginPassword").value.trim(),n=document.getElementById("loginError"),o=document.getElementById("loginBtn");if(e&&t){o.disabled=!0,n.textContent="",o.textContent="登录中...";try{const n=await API.login(e,t);localStorage.setItem("token",n.token),localStorage.setItem("user",JSON.stringify(n.user)),authUser=n.user,window.showToast("登录成功！"),enterMainPage()}catch(e){n.textContent=e.message}finally{o.disabled=!1,o.textContent="登 录"}}else n.textContent="请输入用户名和密码"}function doLogout(){localStorage.removeItem("token"),localStorage.removeItem("user"),authUser=null,"function"==typeof clearUnlockedTags&&clearUnlockedTags();const e=document.getElementById("loginPage"),t=document.getElementById("mainPage");e&&(e.style.display="flex",e.classList.add("show")),t&&(t.style.display="none"),showToast("已退出")}function enterMainPage(){const e=document.getElementById("loginPage"),t=document.getElementById("mainPage");e&&(e.style.display="none",e.classList.remove("show")),t&&(t.style.display="block");const n=JSON.parse(localStorage.getItem("user")||"{}");authUser=n;const o=document.getElementById("displayUsername"),s=document.getElementById("displayRole"),a=document.getElementById("adminBtn");o&&(o.textContent=n.username||"用户"),s&&(s.textContent="admin"===n.role?"管理员":"普通"),a&&"admin"===n.role&&(a.style.display="flex"),"function"==typeof initApp&&initApp()}function getAuthUser(){if(!authUser){const e=localStorage.getItem("user");e&&(authUser=JSON.parse(e))}return authUser}function isLoggedIn(){return!!localStorage.getItem("token")}
+// ============================================================
+//  auth.js - 登录 / 登出
+// ============================================================
+function showLoginPage() {
+  const loginPage = document.getElementById('loginPage');
+  const mainPage = document.getElementById('mainPage');
+  if (loginPage) {
+    loginPage.style.display = 'flex';
+    loginPage.classList.add('show');
+  }
+  if (mainPage) mainPage.style.display = 'none';
+}
+
+function showMainPage() {
+  const loginPage = document.getElementById('loginPage');
+  const mainPage = document.getElementById('mainPage');
+  if (loginPage) {
+    loginPage.style.display = 'none';
+    loginPage.classList.remove('show');
+  }
+  if (mainPage) mainPage.style.display = 'block';
+}
+
+async function doLogin() {
+  const usernameEl = document.getElementById('loginUsername');
+  const passwordEl = document.getElementById('loginPassword');
+  const errorEl = document.getElementById('loginError');
+  const buttonEl = document.getElementById('loginBtn');
+  const username = usernameEl ? usernameEl.value.trim() : '';
+  const password = passwordEl ? passwordEl.value.trim() : '';
+
+  if (!username || !password) {
+    errorEl.textContent = '请输入用户名和密码';
+    return;
+  }
+
+  buttonEl.disabled = true;
+  errorEl.textContent = '';
+  buttonEl.textContent = '登录中...';
+  try {
+    const result = await API.login(username, password);
+    // 换账号前清掉上一个会话的标签授权，避免串号
+    API.clearSession();
+    localStorage.setItem('token', result.token);
+    localStorage.setItem('user', JSON.stringify(result.user));
+    showToast('登录成功！');
+    enterMainPage();
+  } catch (e) {
+    errorEl.textContent = e.message;
+  } finally {
+    buttonEl.disabled = false;
+    buttonEl.textContent = '登 录';
+  }
+}
+
+function doLogout() {
+  API.clearSession();
+  showLoginPage();
+  // 上一个账号的私有数据不应留在浏览器里
+  localStorage.removeItem('siteList');
+  showToast('已退出');
+}
+
+function enterMainPage() {
+  showMainPage();
+  refreshUserMenu();
+  if (typeof initApp === 'function') initApp();
+}
+
+function getAuthUser() {
+  try {
+    return JSON.parse(localStorage.getItem('user') || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function isLoggedIn() {
+  return !!localStorage.getItem('token');
+}
