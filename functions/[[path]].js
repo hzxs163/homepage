@@ -418,7 +418,17 @@ async function handleGetLinks(request, env, ctx, userId) {
             + (epoch === null ? 'nocache' : epoch) + '/'
             + shortFingerprint([...lockedTags].sort().join('|') + '=>' + [...unlocked].sort().join('|'));
         const cache = epoch === null ? null : caches.default;
-        const cached = cache ? await cache.match(cacheKey) : null;
+        let cached = null;
+        let cacheState = 'off';
+        if (cache) {
+            try {
+                cached = await cache.match(cacheKey);
+                cacheState = cached ? 'hit' : 'miss';
+            } catch (e) {
+                console.error('links cache match 失败', e);
+                cacheState = 'err';
+            }
+        }
 
         let body, etag;
         if (cached) {
@@ -437,16 +447,17 @@ async function handleGetLinks(request, env, ctx, userId) {
             if (cache) {
                 ctx.waitUntil(cache.put(cacheKey, new Response(body, {
                     headers: { ETag: etag, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=60' },
-                })));
+                })).catch(e => console.error('links cache put 失败', e)));
             }
         }
 
+        const outHeaders = { ETag: etag, 'X-Links-Cache': cacheState };
         if (etagMatches(request.headers.get('If-None-Match'), etag)) {
-            return new Response(null, { status: 304, headers: { ETag: etag, 'Cache-Control': 'private, no-store' } });
+            return new Response(null, { status: 304, headers: { ...outHeaders, 'Cache-Control': 'private, no-store' } });
         }
         return new Response(body, {
             status: 200,
-            headers: { ETag: etag, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, no-store' },
+            headers: { ...outHeaders, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, no-store' },
         });
     } catch (e) {
         console.error('getLinks failed', e);
