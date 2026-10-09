@@ -209,7 +209,7 @@ UPDATE users SET password = '你的新密码明文' WHERE username = 'admin';
 | 标签筛选 | 点击标签栏中的标签；打开页面默认定位指定标签（可在 `app.js` 的 `loadActiveTag` 中修改） |
 | 标签排序 | 标签栏 ⚙️ 进入拖拽排序；或 用户菜单 → 标签管理 → 输入数字（越小越靠前），回车自动保存 |
 | 标签密码 | 用户菜单 → 标签管理 → 设置/修改/移除标签密码；带锁标签需输入密码解锁 |
-| 链接排序 | 点击 🔒 解锁拖拽 → 拖动卡片，自动保存 |
+| 链接排序 | 点击 🔒 解锁拖拽 → 拖动卡片，自动保存。解锁时会渲染完整列表（拖拽需要能看到全部条目），重新锁定后恢复为首屏分批渲染；向下滚动会加载更多卡片 |
 | 导入 / 导出 | 点击 **导入**（选择 JSON）/ **导出**（下载 JSON 备份） |
 | 测速 | 点击 **测速**，批量检测所有链接可达性与响应时间 |
 | 切换主题 | 点击 🌞/🌙 |
@@ -230,11 +230,12 @@ UPDATE users SET password = '你的新密码明文' WHERE username = 'admin';
 
 | 接口 | 方法 | 说明 |
 |------|------|------|
-| `/api/links` | GET | 获取当前用户链接（`?sort=sort_order&order=ASC`）。**未携带有效 `X-Tag-Grant` 时，被密码保护的标签下的链接由服务端剔除后返回** |
+| `/api/links` | GET | 获取当前用户链接（`?sort=sort_order&order=ASC`）。**未携带有效 `X-Tag-Grant` 时，被密码保护的标签下的链接由服务端剔除后返回**。响应只含渲染必需的列（不再返回 `created_at` / `updated_at`），`tags` 直接是数组，并带内容指纹 `ETag`；请求带 `If-None-Match` 且内容未变时返回 **304 空响应** |
 | `/api/links` | POST | 添加链接 |
 | `/api/links/:id` | PUT | 更新链接 |
 | `/api/links/:id` | DELETE | 删除链接 |
-| `/api/links/:id/sort` | PUT | 更新单个链接排序 |
+| `/api/links/:id/sort` | PUT | 更新单个链接排序（`sort_order` 允许小数，供"插入相邻两项中间"使用） |
+| `/api/links/sort/batch` | PUT | 批量重排，body: `{items: [{id, sort_order}, ...]}`，一次事务写完，上限 2000 条。**仅在空隙用尽或排序值撞号时由前端调用** |
 | `/api/links/export` | GET | 导出当前用户全部链接 |
 | `/api/links/import` | POST | 批量导入（按 url 去重） |
 

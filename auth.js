@@ -57,6 +57,7 @@ function doLogout() {
   API.clearSession();
   showLoginPage();
   // 上一个账号的私有数据不应留在浏览器里
+  localStorage.removeItem('siteSnapshot');
   localStorage.removeItem('siteList');
   showToast('已退出');
 }

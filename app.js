@@ -171,61 +171,108 @@ function toggleTheme() {
   const e = document.getElementById("themeToggleBtn");
   (e && (e.textContent = isDarkTheme ? "🌙" : "🌞"), showToast(isDarkTheme ? "暗黑模式" : "明亮模式"));
 }
-async function loadLinks(e = "sort_order", t = "ASC") {
-  const n = document.getElementById("syncStatus");
-  let o = !1;
-  (document.getElementById("siteListWrap"), document.getElementById("tagsList"));
-  const a = localStorage.getItem("siteList");
-  if (a)
-    try {
-      const e = JSON.parse(a);
-      Array.isArray(e) &&
-        e.length > 0 &&
-        ((siteList = e),
-        (o = !0),
-        hideSkeleton(),
-        renderAll(),
-        restoreScrollPosition(),
-        n && (n.textContent = "● 缓存模式 ⚡"));
-    } catch {}
-  o ? n && (n.textContent = "● 更新中...") : (showSkeleton(), n && (n.textContent = "● 加载中..."));
+const SNAPSHOT_KEY = 'siteSnapshot';
+const LEGACY_SNAPSHOT_KEY = 'siteList';
+let linksEtag = null;
+let snapshotEtag = null;
+
+// 同时兼容服务端新行格式（title / sort_order / tags 数组）与旧快照格式（name / sort）
+function normalizeRow(row) {
+  let tags = row.tags;
+  if (typeof tags === 'string') {
+    try { tags = JSON.parse(tags); } catch { tags = []; }
+  }
+  if (!Array.isArray(tags)) tags = [];
+  return {
+    id: row.id,
+    name: row.title !== undefined ? row.title || '未命名' : row.name || '未命名',
+    url: row.url || '',
+    icon: row.icon || '',
+    icon_url: row.icon_url || '',
+    tags: tags.filter(tag => typeof tag === 'string' && tag),
+    sort: row.sort_order !== undefined ? row.sort_order || 0 : row.sort || 0,
+    click_count: row.click_count || 0,
+  };
+}
+
+function readSnapshot(sort, order) {
   try {
-    const o = await API.getLinks(e, t);
-    if (!Array.isArray(o)) throw new Error("返回的数据不是数组");
-    ((siteList = o.map((e) => {
-      let t = e.tags || [];
-      if ("string" == typeof t)
-        try {
-          t = JSON.parse(t);
-        } catch {
-          t = [];
-        }
-      Array.isArray(t) || (t = []);
-      let n = e.icon_url || "";
-      if (n) {
-        const t = "icon_" + e.id;
-        localStorage.getItem(t) || localStorage.setItem(t, n);
-      }
-      return {
-        id: e.id,
-        name: e.title || "未命名",
-        url: e.url || "",
-        icon: e.icon || "",
-        icon_url: n,
-        tags: t,
-        sort: e.sort_order || 0,
-        click_count: e.click_count || 0,
-      };
-    })),
-      localStorage.setItem("siteList", JSON.stringify(siteList)),
-      hideSkeleton(),
-      renderAll(),
-      restoreScrollPosition(),
-      n && (n.textContent = "● 云端模式 ✅"));
+    const raw = localStorage.getItem(SNAPSHOT_KEY);
+    if (raw) {
+      const stored = JSON.parse(raw);
+      // 排序方式不同时内容顺序不一样，不能复用另一个排序的快照
+      if (stored && Array.isArray(stored.rows) && stored.sort === sort && stored.order === order) return stored;
+    }
+  } catch {}
+  try {
+    const legacy = localStorage.getItem(LEGACY_SNAPSHOT_KEY);
+    if (legacy) {
+      localStorage.removeItem(LEGACY_SNAPSHOT_KEY);
+      const rows = JSON.parse(legacy);
+      if (Array.isArray(rows) && rows.length > 0) return { rows, etag: null, sort, order };
+    }
+  } catch {}
+  return null;
+}
+
+function writeSnapshot(sort, order, rows, etag) {
+  try {
+    // 内容指纹没变就不必再序列化并写入整份列表
+    if (etag && snapshotEtag === etag) return;
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ sort, order, etag, rows }));
+    snapshotEtag = etag;
+  } catch {}
+}
+
+async function loadLinks(sort = 'sort_order', order = 'ASC') {
+  const status = document.getElementById('syncStatus');
+  const snapshot = readSnapshot(sort, order);
+  linksEtag = snapshot ? snapshot.etag || null : null;
+  let usedCache = false;
+
+  if (snapshot && snapshot.rows.length > 0) {
+    siteList = snapshot.rows.map(normalizeRow);
+    usedCache = true;
+    hideSkeleton();
+    renderAll();
+    restoreScrollPosition();
+    if (status) status.textContent = '● 更新中...';
+  } else {
+    showSkeleton();
+    if (status) status.textContent = '● 加载中...';
+  }
+
+  try {
+    const result = await API.getLinks(sort, order, linksEtag);
+
+    // 服务端确认内容未变：列表保持原样，不重新渲染，也不重写本地快照
+    if (result.notModified) {
+      if (status) status.textContent = usedCache ? '● 云端一致 ✅' : '● 云端模式 ✅';
+      return;
+    }
+    if (!Array.isArray(result.data)) throw new Error('返回的数据不是数组');
+
+    linksEtag = result.etag || null;
+    siteList = result.data.map(normalizeRow);
+    result.data.forEach(row => {
+      if (!row.icon_url) return;
+      const key = 'icon_' + row.id;
+      if (!localStorage.getItem(key)) localStorage.setItem(key, row.icon_url);
+    });
+    writeSnapshot(sort, order, result.data, linksEtag);
+    hideSkeleton();
+    renderAll();
+    restoreScrollPosition();
+    if (status) status.textContent = '● 云端模式 ✅';
   } catch (e) {
-    (console.error("后台更新失败:", e),
-      o || ((siteList = []), hideSkeleton(), renderAll(), showToast("加载数据失败，请刷新重试")),
-      n && (n.textContent = o ? "● 缓存模式" : "● 无数据"));
+    console.error('后台更新失败:', e);
+    if (!usedCache) {
+      siteList = [];
+      hideSkeleton();
+      renderAll();
+      showToast('加载数据失败，请刷新重试');
+    }
+    if (status) status.textContent = usedCache ? '● 缓存模式' : '● 无数据';
   }
 }
 window.showToast = showToast;
@@ -517,6 +564,46 @@ function attachCardInteractions(card, site) {
   });
 }
 
+const RENDER_FIRST_CHUNK = 120;
+const RENDER_MORE_CHUNK = 240;
+let renderLimit = RENDER_FIRST_CHUNK;
+let renderViewKey = '';
+let listSentinelObserver = null;
+
+// 拖拽要能把卡片放到任意位置，所以解锁拖拽时渲染完整列表；日常浏览只渲染滚动到的部分
+function currentRenderLimit() {
+  return isDragLocked ? renderLimit : Infinity;
+}
+
+function growRenderWindow() {
+  renderLimit += RENDER_MORE_CHUNK;
+  renderList();
+}
+
+function attachListSentinel(wrap, remaining) {
+  const stale = wrap.querySelector('.load-more-sentinel');
+  if (stale) stale.remove();
+  if (listSentinelObserver) {
+    listSentinelObserver.disconnect();
+    listSentinelObserver = null;
+  }
+  if (remaining <= 0) return;
+
+  const sentinel = document.createElement('div');
+  sentinel.className = 'load-more-sentinel';
+  sentinel.style.cssText = 'grid-column:1/-1;text-align:center;padding:18px;color:#6b7280;font-size:13px;';
+  sentinel.textContent = '向下滚动继续加载（还有 ' + remaining + ' 条）';
+  wrap.appendChild(sentinel);
+
+  listSentinelObserver = new IntersectionObserver(
+    entries => {
+      if (entries.some(entry => entry.isIntersecting)) growRenderWindow();
+    },
+    { rootMargin: '300px' }
+  );
+  listSentinelObserver.observe(sentinel);
+}
+
 function renderList() {
   if (isRendering) return;
   if (!Array.isArray(siteList)) {
@@ -534,7 +621,17 @@ function renderList() {
     isRendering = false;
     return;
   }
+
   const filtered = getFilteredList();
+
+  // 换了标签 / 搜索词 / 排序方式，回到首屏窗口
+  const searchEl = document.getElementById('searchInput');
+  const sortEl = document.getElementById('sortSelect');
+  const viewKey = activeTag + '|' + (searchEl ? searchEl.value : '') + '|' + (sortEl ? sortEl.value : '');
+  if (viewKey !== renderViewKey) {
+    renderViewKey = viewKey;
+    renderLimit = RENDER_FIRST_CHUNK;
+  }
 
   if (!Array.isArray(filtered) || filtered.length === 0) {
     wrap.replaceChildren();
@@ -542,15 +639,20 @@ function renderList() {
     empty.style.cssText = 'grid-column:1/-1;text-align:center;padding:40px;color:#6b7280;';
     empty.textContent = '暂无链接，点击「添加网址」开始收藏';
     wrap.appendChild(empty);
+    attachListSentinel(wrap, 0);
     isRendering = false;
     return;
   }
 
+  const limit = currentRenderLimit();
+  const visible = filtered.length > limit ? filtered.slice(0, limit) : filtered;
+
   const existing = wrap.querySelectorAll('.site-item');
-  if (existing.length === filtered.length && existing.length > 0) {
-    const sameOrder = Array.from(existing).every((node, i) => parseInt(node.dataset.id) === filtered[i].id);
+  if (existing.length === visible.length && existing.length > 0) {
+    const sameOrder = Array.from(existing).every((node, i) => parseInt(node.dataset.id) === visible[i].id);
     if (sameOrder) {
-      existing.forEach((node, i) => updateItemContent(node, filtered[i]));
+      existing.forEach((node, i) => updateItemContent(node, visible[i]));
+      attachListSentinel(wrap, filtered.length - visible.length);
       bindCardEvents(wrap);
       if (!isDragLocked) setTimeout(() => initSortableDrag(), 50);
       isRendering = false;
@@ -560,7 +662,7 @@ function renderList() {
 
   const fragment = document.createDocumentFragment();
   const pendingIcons = [];
-  filtered.forEach(site => {
+  visible.forEach(site => {
     const { card, needsRemoteIcon } = renderCard(site);
     attachCardInteractions(card, site);
     if (needsRemoteIcon) pendingIcons.push({ div: card, site });
@@ -568,6 +670,7 @@ function renderList() {
   });
 
   wrap.replaceChildren(fragment);
+  attachListSentinel(wrap, filtered.length - visible.length);
   bindCardEvents(wrap);
   setTimeout(() => {
     if (!isDragLocked) initSortableDrag();
@@ -745,48 +848,126 @@ function clearSearch() {
 }
 function toggleDragLock() {
   isDragLocked = !isDragLocked;
-  const e = document.getElementById("dragLockBtn");
-  (e && ((e.textContent = isDragLocked ? "🔒" : "🔓"), e.classList.toggle("locked", isDragLocked)),
-    document.querySelectorAll(".site-item").forEach((e) => {
-      (e.classList.toggle("locked", isDragLocked), (e.style.cursor = isDragLocked ? "not-allowed" : "grab"));
-    }),
-    isDragLocked ? sortableInstance && (sortableInstance.destroy(), (sortableInstance = null)) : initSortableDrag(),
-    showToast(isDragLocked ? "拖拽已锁定" : "拖拽已解锁"));
+  const btn = document.getElementById('dragLockBtn');
+  if (btn) {
+    btn.textContent = isDragLocked ? '🔒' : '🔓';
+    btn.classList.toggle('locked', isDragLocked);
+  }
+  if (sortableInstance) {
+    sortableInstance.destroy();
+    sortableInstance = null;
+  }
+  // 解锁后需要完整列表才能把卡片拖到任意位置；重新锁定后收回首屏窗口
+  if (isDragLocked) renderLimit = RENDER_FIRST_CHUNK;
+  renderList();
+  showToast(isDragLocked ? '拖拽已锁定' : '拖拽已解锁');
 }
+const SORT_STEP = 10;
+const SORT_MIN_GAP = 1e-6;
+const SORT_BATCH_CHUNK = 2000;
+
+// 在相邻两项之间取中间值；没有缝隙时返回 null，交给调用方做整体重排
+function pickSortBetween(prevSort, nextSort) {
+  if (prevSort === null && nextSort === null) return null;
+  if (prevSort === null) return nextSort - SORT_STEP;
+  if (nextSort === null) return prevSort + SORT_STEP;
+  if (nextSort - prevSort <= SORT_MIN_GAP) return null;
+  const mid = (prevSort + nextSort) / 2;
+  return mid > prevSort && mid < nextSort ? mid : null;
+}
+
+function currentViewOrder(wrap) {
+  const byId = new Map(siteList.map(site => [site.id, site]));
+  return Array.from(wrap.querySelectorAll('.site-item'))
+    .map(node => byId.get(parseInt(node.dataset.id)))
+    .filter(Boolean);
+}
+
+async function sendSortChunks(items) {
+  for (let i = 0; i < items.length; i += SORT_BATCH_CHUNK) {
+    await API.setSortBatch(items.slice(i, i + SORT_BATCH_CHUNK));
+  }
+}
+
+// 把被移动的卡片插入到全局顺序中紧邻 prevId 的位置，其余相对顺序不变
+function reorderGlobalList(movedId, prevId, nextId) {
+  const global = [...siteList].sort((a, b) => a.sort - b.sort);
+  const moved = global.find(site => site.id === movedId);
+  if (!moved) return null;
+  const rest = global.filter(site => site.id !== movedId);
+  let at = 0;
+  if (prevId !== null) at = rest.findIndex(site => site.id === prevId) + 1;
+  else if (nextId !== null) at = rest.findIndex(site => site.id === nextId);
+  if (at < 0) at = 0;
+  rest.splice(at, 0, moved);
+  const changed = [];
+  rest.forEach((site, i) => {
+    const value = SORT_STEP * (i + 1);
+    if (site.sort !== value) {
+      site.sort = value;
+      changed.push({ id: site.id, sort_order: value });
+    }
+  });
+  return changed;
+}
+
+// 排序值保持互不相同：只在筛选视图内部取中点或步进时，被筛掉的项可能占用同一个值
+function sortValueTaken(target, excludeId) {
+  return siteList.some(site => site.id !== excludeId && site.sort === target);
+}
+
+// 常规情况：只重算被拖动那一条的排序值 -> 1 个请求、1 行写入。
+// 只有在"相邻两项之间已无空隙"或"新值与他人撞号"时，才做一次整体重排并走批量接口。
+async function applyDragOrder(wrap, movedNode) {
+  const view = currentViewOrder(wrap);
+  const movedId = parseInt(movedNode.dataset.id);
+  const moved = view.find(site => site.id === movedId);
+  if (!moved) return;
+
+  const index = view.findIndex(site => site.id === movedId);
+  const prev = index > 0 ? view[index - 1] : null;
+  const next = index < view.length - 1 ? view[index + 1] : null;
+
+  const candidate = pickSortBetween(prev ? prev.sort : null, next ? next.sort : null);
+  const usable = candidate !== null && !sortValueTaken(candidate, movedId);
+
+  if (usable) {
+    moved.sort = candidate;
+    await API.updateSort(moved.id, candidate);
+  } else {
+    const changed = reorderGlobalList(movedId, prev ? prev.id : null, next ? next.id : null);
+    if (changed === null || changed.length === 0) return;
+    await sendSortChunks(changed);
+  }
+
+  siteList.sort((a, b) => a.sort - b.sort);
+}
+
 function initSortableDrag() {
   if (isDragLocked || sortableInstance) return;
-  const e = document.getElementById("siteListWrap");
-  e &&
-    (sortableInstance = new Sortable(e, {
-      animation: 200,
-      ghostClass: "sortable-ghost",
-      dragClass: "sortable-drag",
-      onStart: () => {
-        ((isDragging = !0), (isMouseMoving = !1));
-      },
-      onEnd: async (e) => {
-        ((isDragging = !1), (isMouseMoving = !1));
-        const t = document.getElementById("siteListWrap");
-        if (!t) return;
-        const n = t.querySelectorAll(".site-item"),
-          o = [];
-        (n.forEach((e) => {
-          const t = parseInt(e.dataset.id),
-            n = siteList.find((e) => e.id === t);
-          n && o.push(n);
-        }),
-          o.forEach((e, t) => {
-            e.sort = 10 * (t + 1);
-          }),
-          siteList.sort((e, t) => e.sort - t.sort));
-        try {
-          for (const e of o) await API.updateSort(e.id, e.sort);
-          showToast("排序已保存");
-        } catch (e) {
-          (showToast("排序保存失败，重新加载数据"), await loadLinks());
-        }
-      },
-    }));
+  const wrap = document.getElementById('siteListWrap');
+  if (!wrap) return;
+
+  sortableInstance = new Sortable(wrap, {
+    animation: 200,
+    ghostClass: 'sortable-ghost',
+    dragClass: 'sortable-drag',
+    onStart: () => {
+      isDragging = true;
+      isMouseMoving = false;
+    },
+    onEnd: async evt => {
+      isDragging = false;
+      isMouseMoving = false;
+      try {
+        await applyDragOrder(wrap, evt.item);
+        showToast('排序已保存');
+      } catch (e) {
+        showToast('排序保存失败，重新加载数据');
+        await loadLinks(...currentSort());
+      }
+    },
+  });
 }
 function openEditModal(e = null) {
   editingId = e;
@@ -1553,9 +1734,17 @@ function isTagUnlocked(tag) {
   return getUnlockedTags().includes(tag);
 }
 
+// 可见集合发生变化时，作废本地指纹与快照，强制下一次拉取拿完整新内容
+function invalidateListCache() {
+  linksEtag = null;
+  snapshotEtag = null;
+  try { localStorage.removeItem(SNAPSHOT_KEY); } catch {}
+}
+
 function clearTagUnlocks() {
   sessionStorage.removeItem('unlockedTags');
   API.setTagGrant('');
+  invalidateListCache();
 }
 
 async function setTagPassword(tagName, password) {
@@ -1634,6 +1823,7 @@ async function confirmTagPassword() {
     // 先落 grant 再拉数据，否则服务端仍会过滤掉该标签下的链接
     API.setTagGrant(result.grant);
     setUnlockedTags(result.tags);
+    invalidateListCache();
     closeTagPasswordModal();
     showToast(`✅ 标签「${tag}」已解锁`);
     activeTag = tag;

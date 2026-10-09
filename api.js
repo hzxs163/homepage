@@ -28,17 +28,24 @@ function clearSession() {
 // 这些接口的 401 表示"本次提交的口令不对"，不是"会话失效"，不能触发全局登出
 const AUTH_ATTEMPT_PATHS = ['/api/auth/login', '/api/tag-passwords/unlock'];
 
-async function apiCall(method, path, body = null) {
+async function apiCall(method, path, body = null, options = {}) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getToken();
   if (token) headers.Authorization = 'Bearer ' + token;
   const grant = getTagGrant();
   if (grant) headers['X-Tag-Grant'] = grant;
+  if (options.ifNoneMatch) headers['If-None-Match'] = options.ifNoneMatch;
 
   const init = { method, headers };
   if (body) init.body = JSON.stringify(body);
 
   const response = await fetch(path, init);
+
+  // 304 没有响应体，不能走 json()
+  if (response.status === 304) {
+    return { notModified: true, etag: response.headers.get('ETag') };
+  }
+
   const data = await response.json();
 
   if (!response.ok) {
@@ -50,6 +57,10 @@ async function apiCall(method, path, body = null) {
     }
     throw new Error(data.error || '请求失败');
   }
+
+  if (options.withMeta) {
+    return { notModified: false, data, etag: response.headers.get('ETag') };
+  }
   return data;
 }
 
@@ -59,12 +70,14 @@ const API = {
   setTagGrant,
   login: async (username, password) => await apiCall('POST', '/api/auth/login', { username, password }),
 
-  getLinks: async (sort = 'sort_order', order = 'ASC') =>
-    await apiCall('GET', `/api/links?sort=${sort}&order=${order}`),
+  getLinks: async (sort = 'sort_order', order = 'ASC', etag = null) =>
+    await apiCall('GET', `/api/links?sort=${sort}&order=${order}`, null, { withMeta: true, ifNoneMatch: etag }),
   addLink: async (link) => await apiCall('POST', '/api/links', link),
   updateLink: async (id, link) => await apiCall('PUT', '/api/links/' + id, link),
   deleteLink: async (id) => await apiCall('DELETE', '/api/links/' + id),
   updateSort: async (id, sort_order) => await apiCall('PUT', `/api/links/${id}/sort`, { sort_order }),
+  // 仅在"空隙用尽、需要整体重排"时使用；常规拖动走 updateSort 单条
+  setSortBatch: async (items) => await apiCall('PUT', '/api/links/sort/batch', { items }),
 
   async recordClick(id) {
     try {

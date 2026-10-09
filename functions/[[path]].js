@@ -315,7 +315,58 @@ async function handleSort(request, env, userId, id) {
     }
 }
 
+// 全量重排兜底：一个事务里写完，替代"逐条 await 发 N 个请求"
+const SORT_BATCH_MAX = 2000;
+
+async function handleSortBatch(request, env, userId) {
+    let body;
+    try {
+        body = await request.json();
+    } catch {
+        return errorResponse('请求体必须是合法 JSON', 400);
+    }
+    const items = Array.isArray(body.items) ? body.items : null;
+    if (!items) return errorResponse('items 必须是数组', 400);
+    if (items.length > SORT_BATCH_MAX) return errorResponse('单次最多更新 ' + SORT_BATCH_MAX + ' 条排序', 400);
+
+    const statements = [];
+    for (const item of items) {
+        const id = Number(item && item.id);
+        const sortOrder = Number(item && item.sort_order);
+        if (!Number.isInteger(id) || id <= 0 || !Number.isFinite(sortOrder)) continue;
+        statements.push(
+            env.DB.prepare('UPDATE links SET sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
+                .bind(sortOrder, id, userId)
+        );
+    }
+    if (statements.length === 0) return jsonResponse({ success: true, updated: 0 });
+
+    try {
+        const results = await env.DB.batch(statements);
+        const updated = results.reduce((sum, r) => sum + (r && r.meta ? r.meta.changes : 0), 0);
+        return jsonResponse({ success: true, updated });
+    } catch (e) {
+        console.error('sortBatch failed', e);
+        return errorResponse('批量更新排序失败', 500);
+    }
+}
+
 const MAX_LINKS_RETURN = 5000;
+
+// 列表接口专用响应：带内容指纹，客户端可带 If-None-Match 换取 304 空响应
+async function jsonWithEtag(request, data) {
+    const body = JSON.stringify(data);
+    const etag = '"sha256-' + (await sha256Hex(body)).slice(0, 32) + '"';
+    const headers = { ETag: etag, 'Cache-Control': 'private, no-store' };
+    if (request.headers.get('If-None-Match') === etag) {
+        return new Response(null, { status: 304, headers });
+    }
+    headers['Content-Type'] = 'application/json; charset=utf-8';
+    return new Response(body, { status: 200, headers });
+}
+
+// 卡片只需要这些列；created_at / updated_at 不再随列表下发
+const LINK_LIST_COLUMNS = 'id, title, url, icon, icon_url, tags, sort_order, click_count';
 
 async function handleGetLinks(request, env, userId) {
     try {
@@ -325,19 +376,20 @@ async function handleGetLinks(request, env, userId) {
         const allowedSortFields = ['sort_order', 'click_count', 'created_at', 'title'];
         const finalSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'sort_order';
         const finalOrder = order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
-        const sql = `SELECT * FROM links WHERE user_id = ? ORDER BY ${finalSortBy} ${finalOrder} LIMIT ${MAX_LINKS_RETURN}`;
+        const sql = `SELECT ${LINK_LIST_COLUMNS} FROM links WHERE user_id = ? ORDER BY ${finalSortBy} ${finalOrder} LIMIT ${MAX_LINKS_RETURN}`;
         const links = await env.DB.prepare(sql).bind(userId).all();
 
         // 私密标签在返回给浏览器之前就被剔除，链接内容不会离开服务端
         const lockedTags = await getLockedTagNames(env, userId);
-        if (lockedTags.length === 0) return jsonResponse(links.results);
-
-        const unlocked = await readTagGrant(request, env, userId);
+        const unlocked = lockedTags.length > 0 ? await readTagGrant(request, env, userId) : new Set();
         const visible = links.results.filter(row => {
-            const tags = parseTags(row.tags);
-            return !tags.some(tag => lockedTags.includes(tag) && !unlocked.has(tag));
+            if (lockedTags.length === 0) return true;
+            return !parseTags(row.tags).some(tag => lockedTags.includes(tag) && !unlocked.has(tag));
         });
-        return jsonResponse(visible);
+
+        // 标签由服务端解析成数组，浏览器不必再逐条 JSON.parse
+        const payload = visible.map(row => ({ ...row, tags: parseTags(row.tags) }));
+        return jsonWithEtag(request, payload);
     } catch (e) {
         console.error('getLinks failed', e);
         return errorResponse('获取链接失败', 500);
@@ -769,6 +821,7 @@ export async function onRequest(context) {
             return handleSpeedtest(request);
         }
 
+        if (path === '/api/links/sort/batch' && method === 'PUT') return handleSortBatch(request, env, userId);
         if (path.match(/^\/api\/links\/\d+\/sort$/) && method === 'PUT') {
             return handleSort(request, env, userId, parseInt(path.split('/')[3]));
         }
