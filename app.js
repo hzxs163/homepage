@@ -1285,7 +1285,7 @@ async function handleFileImport(e) {
           void (await loadLinks())
         );
       showToast(`共 ${o.length} 条，其中 ${s} 条已存在，将导入 ${a.length} 条新数据`);
-      const r = 20;
+      const r = 500;
       let i = 0,
         c = 0,
         l = 0;
@@ -1712,15 +1712,38 @@ function cleanupLazyLoad() {
 //  浏览器只知道"哪些标签被锁"，既拿不到哈希也不需要持有明文
 // ============================================================
 let lockedTagSet = new Set();
+const LOCKED_TAGS_TTL_MS = 15000;
+let lockedTagsCache = { at: 0, set: null };
+let lockedTagsInflight = null;
 
+async function fetchLockedTags() {
+  const list = await API.getTagPasswords();
+  return new Set(Array.isArray(list) ? list.map(item => item.tag_name).filter(Boolean) : []);
+}
+
+// 首屏会先用本地快照渲染、再用网络数据渲染，不去重就会把同一个请求发两遍
 async function loadLockedTags() {
-  try {
-    const list = await API.getTagPasswords();
-    return new Set(Array.isArray(list) ? list.map(item => item.tag_name).filter(Boolean) : []);
-  } catch (e) {
-    console.error('加载标签锁状态失败:', e);
-    return new Set();
-  }
+  const now = Date.now();
+  if (lockedTagsCache.set && now - lockedTagsCache.at < LOCKED_TAGS_TTL_MS) return lockedTagsCache.set;
+  if (lockedTagsInflight) return lockedTagsInflight;
+
+  lockedTagsInflight = fetchLockedTags()
+    .then(set => {
+      lockedTagsCache = { at: Date.now(), set };
+      lockedTagsInflight = null;
+      return set;
+    })
+    .catch(e => {
+      lockedTagsInflight = null;
+      console.error('加载标签锁状态失败:', e);
+      return new Set();
+    });
+  return lockedTagsInflight;
+}
+
+function invalidateLockedTags() {
+  lockedTagsCache = { at: 0, set: null };
+  lockedTagsInflight = null;
 }
 
 // 已解锁列表只驱动界面显示，链接可见性由服务端签发的 grant 决定
@@ -1801,11 +1824,13 @@ function initAutoLock() {
 
 async function setTagPassword(tagName, password) {
   await API.setTagPassword(tagName, password || '');
+  invalidateLockedTags();
   clearTagUnlocks();
 }
 
 async function deleteTagPassword(tagName) {
   await API.deleteTagPassword(tagName);
+  invalidateLockedTags();
   clearTagUnlocks();
 }
 

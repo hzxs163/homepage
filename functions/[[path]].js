@@ -308,6 +308,7 @@ async function handleSort(request, env, userId, id) {
         if (!existing) return errorResponse('链接不存在', 404);
         await env.DB.prepare('UPDATE links SET sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
             .bind(sort_order, id, userId).run();
+        await touchLinksEpoch(env, userId);
         return jsonResponse({ success: true });
     } catch (e) {
         console.error('sort failed', e);
@@ -344,6 +345,7 @@ async function handleSortBatch(request, env, userId) {
     try {
         const results = await env.DB.batch(statements);
         const updated = results.reduce((sum, r) => sum + (r && r.meta ? r.meta.changes : 0), 0);
+        await touchLinksEpoch(env, userId);
         return jsonResponse({ success: true, updated });
     } catch (e) {
         console.error('sortBatch failed', e);
@@ -352,8 +354,8 @@ async function handleSortBatch(request, env, userId) {
 }
 
 const MAX_LINKS_RETURN = 5000;
-
-// 列表接口专用响应：带内容指纹，客户端可带 If-None-Match 换取 304 空响应
+const IMPORT_MAX = 3000;
+const IMPORT_CHUNK = 500;
 
 // Cloudflare 边缘会把 ETag 改写成弱校验器（W/"..."），浏览器原样回传；
 // 逐字符全等比较会永远失配，必须按 HTTP 语义剥离 W/ 并支持逗号列表与 *
@@ -365,21 +367,41 @@ function etagMatches(header, etag) {
     return header.split(',').some(value => strip(value) === target);
 }
 
-async function jsonWithEtag(request, data) {
-    const body = JSON.stringify(data);
-    const etag = '"sha256-' + (await sha256Hex(body)).slice(0, 32) + '"';
-    const headers = { ETag: etag, 'Cache-Control': 'private, no-store' };
-    if (etagMatches(request.headers.get('If-None-Match'), etag)) {
-        return new Response(null, { status: 304, headers });
-    }
-    headers['Content-Type'] = 'application/json; charset=utf-8';
-    return new Response(body, { status: 200, headers });
-}
-
 // 卡片只需要这些列；created_at / updated_at 不再随列表下发
 const LINK_LIST_COLUMNS = 'id, title, url, icon, icon_url, tags, sort_order, click_count';
 
-async function handleGetLinks(request, env, userId) {
+// 读 1568 行代价高（约 300ms），而它只被本人写操作改变。
+// 用一行 epoch 参与缓存键，写操作自增即可精确失效。
+// 读不到（迁移未执行）就退回"不缓存"；自增失败也只记日志——绝不能因为缓存优化而让写操作失败。
+async function readLinksEpoch(env, userId) {
+    try {
+        const row = await env.DB.prepare('SELECT epoch FROM link_epochs WHERE user_id = ?').bind(userId).first();
+        return row ? Number(row.epoch) || 0 : 0;
+    } catch (e) {
+        console.error('link_epochs 不可用，列表缓存已跳过', e);
+        return null;
+    }
+}
+
+async function touchLinksEpoch(env, userId) {
+    try {
+        await env.DB.prepare(
+            'INSERT INTO link_epochs (user_id, epoch) VALUES (?, 1) ON CONFLICT(user_id) DO UPDATE SET epoch = epoch + 1, updated_at = CURRENT_TIMESTAMP'
+        ).bind(userId).run();
+    } catch (e) {
+        console.error('link_epochs 自增失败，列表缓存将在 TTL 后自行恢复', e);
+    }
+}
+
+function shortFingerprint(value) {
+    // 只用于拼缓存键，不需要密码学强度
+    let h = 5381;
+    const s = String(value);
+    for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+    return h.toString(36);
+}
+
+async function handleGetLinks(request, env, ctx, userId) {
     try {
         const url = new URL(request.url);
         const sortBy = url.searchParams.get('sort') || 'sort_order';
@@ -387,20 +409,45 @@ async function handleGetLinks(request, env, userId) {
         const allowedSortFields = ['sort_order', 'click_count', 'created_at', 'title'];
         const finalSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'sort_order';
         const finalOrder = order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
-        const sql = `SELECT ${LINK_LIST_COLUMNS} FROM links WHERE user_id = ? ORDER BY ${finalSortBy} ${finalOrder} LIMIT ${MAX_LINKS_RETURN}`;
-        const links = await env.DB.prepare(sql).bind(userId).all();
 
-        // 私密标签在返回给浏览器之前就被剔除，链接内容不会离开服务端
+        // 可见集合由"哪些标签被锁 + 本次解锁了哪些"共同决定，两者都要进缓存键
         const lockedTags = await getLockedTagNames(env, userId);
         const unlocked = lockedTags.length > 0 ? await readTagGrant(request, env, userId) : new Set();
-        const visible = links.results.filter(row => {
-            if (lockedTags.length === 0) return true;
-            return !parseTags(row.tags).some(tag => lockedTags.includes(tag) && !unlocked.has(tag));
-        });
+        const epoch = await readLinksEpoch(env, userId);
+        const cacheKey = 'https://links-cache.local/v1/' + userId + '/' + finalSortBy + '/' + finalOrder + '/'
+            + (epoch === null ? 'nocache' : epoch) + '/'
+            + shortFingerprint([...lockedTags].sort().join('|') + '=>' + [...unlocked].sort().join('|'));
+        const cache = epoch === null ? null : caches.default;
+        const cached = cache ? await cache.match(cacheKey) : null;
 
-        // 标签由服务端解析成数组，浏览器不必再逐条 JSON.parse
-        const payload = visible.map(row => ({ ...row, tags: parseTags(row.tags) }));
-        return jsonWithEtag(request, payload);
+        let body, etag;
+        if (cached) {
+            body = await cached.text();
+            etag = cached.headers.get('ETag');
+        } else {
+            const sql = `SELECT ${LINK_LIST_COLUMNS} FROM links WHERE user_id = ? ORDER BY ${finalSortBy} ${finalOrder} LIMIT ${MAX_LINKS_RETURN}`;
+            const links = await env.DB.prepare(sql).bind(userId).all();
+            const visible = links.results.filter(row => {
+                if (lockedTags.length === 0) return true;
+                return !parseTags(row.tags).some(tag => lockedTags.includes(tag) && !unlocked.has(tag));
+            });
+            // 标签由服务端解析成数组，浏览器不必再逐条 JSON.parse
+            body = JSON.stringify(visible.map(row => ({ ...row, tags: parseTags(row.tags) })));
+            etag = '"sha256-' + (await sha256Hex(body)).slice(0, 32) + '"';
+            if (cache) {
+                ctx.waitUntil(cache.put(cacheKey, new Response(body, {
+                    headers: { ETag: etag, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=60' },
+                })));
+            }
+        }
+
+        if (etagMatches(request.headers.get('If-None-Match'), etag)) {
+            return new Response(null, { status: 304, headers: { ETag: etag, 'Cache-Control': 'private, no-store' } });
+        }
+        return new Response(body, {
+            status: 200,
+            headers: { ETag: etag, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, no-store' },
+        });
     } catch (e) {
         console.error('getLinks failed', e);
         return errorResponse('获取链接失败', 500);
@@ -408,14 +455,26 @@ async function handleGetLinks(request, env, userId) {
 }
 
 async function handlePostLinks(request, env, userId) {
+    let body;
     try {
-        const { title, url, icon, icon_url, tags, sort_order } = await request.json();
-        if (!title || !url) return errorResponse('标题和 URL 不能为空');
-        if (!isValidHttpUrl(url)) return errorResponse('URL 必须以 http:// 或 https:// 开头');
+        body = await request.json();
+    } catch {
+        return errorResponse('请求体必须是合法 JSON', 400);
+    }
+    const { title, url, icon, icon_url, tags, sort_order } = body || {};
+    if (!title || !url) return errorResponse('标题和 URL 不能为空', 400);
+    if (!isValidHttpUrl(url)) return errorResponse('URL 必须以 http:// 或 https:// 开头', 400);
+    try {
         const tagsStr = tags ? JSON.stringify(tags) : '[]';
+        // 用 INSERT OR IGNORE 而不是 ON CONFLICT(user_id,url)：前者只要求"存在唯一约束"，
+        // 不依赖具体列组合，因此"索引迁移还没执行"时也不会报错（届时行为等同旧的全局唯一）
         const result = await env.DB.prepare(
-            'INSERT INTO links (user_id, title, url, icon, icon_url, tags, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)'
+            'INSERT OR IGNORE INTO links (user_id, title, url, icon, icon_url, tags, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)'
         ).bind(userId, title, url, icon || '', icon_url || '', tagsStr, sort_order || 0).run();
+        if (!result.meta || result.meta.changes === 0) {
+            return errorResponse('你已收藏过该网址，或该网址已被其他用户占用', 409);
+        }
+        await touchLinksEpoch(env, userId);
         const newLink = await env.DB.prepare('SELECT * FROM links WHERE id = ?').bind(result.meta.last_row_id).first();
         return jsonResponse(newLink, 201);
     } catch (e) {
@@ -435,6 +494,7 @@ async function handlePutLink(request, env, userId, id) {
             `UPDATE links SET title = ?, url = ?, icon = ?, icon_url = ?, tags = ?, sort_order = ?, updated_at = CURRENT_TIMESTAMP
              WHERE id = ? AND user_id = ?`
         ).bind(title, url, icon || '', icon_url || '', tagsStr, sort_order || 0, id, userId).run();
+        await touchLinksEpoch(env, userId);
         return jsonResponse({ success: true });
     } catch (e) {
         console.error('putLink failed', e);
@@ -447,6 +507,7 @@ async function handleDeleteLink(request, env, userId, id) {
         const existing = await env.DB.prepare('SELECT * FROM links WHERE id = ? AND user_id = ?').bind(id, userId).first();
         if (!existing) return errorResponse('链接不存在', 404);
         await env.DB.prepare('DELETE FROM links WHERE id = ? AND user_id = ?').bind(id, userId).run();
+        await touchLinksEpoch(env, userId);
         return jsonResponse({ success: true });
     } catch (e) {
         console.error('deleteLink failed', e);
@@ -468,58 +529,55 @@ async function handleExport(request, env, userId) {
 }
 
 async function handleImport(request, env, userId) {
+    let data;
     try {
-        const data = await request.json();
-        if (!Array.isArray(data) || data.length === 0) return errorResponse('数据格式错误，需要非空数组', 400);
-        if (data.length > 3000) return errorResponse('单次导入不能超过3000条', 400);
+        data = await request.json();
+    } catch {
+        return errorResponse('请求体必须是合法 JSON', 400);
+    }
+    if (!Array.isArray(data) || data.length === 0) return errorResponse('数据格式错误，需要非空数组', 400);
+    if (data.length > IMPORT_MAX) return errorResponse('单次导入不能超过' + IMPORT_MAX + '条', 400);
 
-        const existing = await env.DB.prepare('SELECT url FROM links WHERE user_id = ?').bind(userId).all();
-        const existingUrls = new Set(existing.results.map(r => r.url));
-
-        const validItems = [];
-        let skipCount = 0;
-        for (const item of data) {
-            if (!item.title || !item.url) continue;
-            if (!isValidHttpUrl(item.url)) continue;
-            if (existingUrls.has(item.url)) { skipCount++; continue; }
-            const tagsStr = Array.isArray(item.tags) ? JSON.stringify(item.tags) : '[]';
-            validItems.push({
-                user_id: userId, title: item.title, url: item.url,
-                icon: item.icon || '', icon_url: item.icon_url || '',
-                tags: tagsStr, sort_order: item.sort_order || item.sort || 0
-            });
-            existingUrls.add(item.url);
+    const seenInBatch = new Set();
+    const validItems = [];
+    let invalidCount = 0;
+    for (const item of data) {
+        const title = typeof item.title === 'string' ? item.title : (typeof item.name === 'string' ? item.name : '');
+        const linkUrl = typeof item.url === 'string' ? item.url : '';
+        if (!title || !linkUrl || !isValidHttpUrl(linkUrl) || seenInBatch.has(linkUrl)) {
+            invalidCount++;
+            continue;
         }
+        seenInBatch.add(linkUrl);
+        validItems.push({
+            title, url: linkUrl,
+            icon: typeof item.icon === 'string' ? item.icon : '',
+            icon_url: typeof item.icon_url === 'string' ? item.icon_url : '',
+            tags: JSON.stringify(Array.isArray(item.tags) ? item.tags : []),
+            sort_order: Number(item.sort_order || item.sort || 0) || 0,
+        });
+    }
+    if (validItems.length === 0) {
+        return jsonResponse({ success: true, total: data.length, successCount: 0, skipCount: 0, invalidCount });
+    }
 
-        if (validItems.length === 0) {
-            return jsonResponse({ success: true, total: data.length, successCount: 0, skipCount, errorCount: 0, message: '没有新数据需要导入' });
-        }
-
-        const BATCH_SIZE = 100;
+    // 去重交给唯一索引：不再每个批次都 SELECT 一遍全表
+    try {
         let successCount = 0;
-        const errors = [];
-        for (let i = 0; i < validItems.length; i += BATCH_SIZE) {
-            const batch = validItems.slice(i, i + BATCH_SIZE);
-            const placeholders = batch.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
-            const sql = `INSERT INTO links (user_id, title, url, icon, icon_url, tags, sort_order) VALUES ${placeholders}`;
+        for (let i = 0; i < validItems.length; i += IMPORT_CHUNK) {
+            const chunk = validItems.slice(i, i + IMPORT_CHUNK);
+            const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
             const params = [];
-            for (const item of batch) params.push(item.user_id, item.title, item.url, item.icon, item.icon_url, item.tags, item.sort_order);
-            try {
-                await env.DB.prepare(sql).bind(...params).run();
-                successCount += batch.length;
-            } catch (e) {
-                for (const item of batch) {
-                    try {
-                        await env.DB.prepare('INSERT INTO links (user_id, title, url, icon, icon_url, tags, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)')
-                            .bind(item.user_id, item.title, item.url, item.icon, item.icon_url, item.tags, item.sort_order).run();
-                        successCount++;
-                    } catch (err) {
-                        errors.push(item.url);
-                    }
-                }
-            }
+            for (const item of chunk) params.push(userId, item.title, item.url, item.icon, item.icon_url, item.tags, item.sort_order);
+            const result = await env.DB
+                .prepare(`INSERT OR IGNORE INTO links (user_id, title, url, icon, icon_url, tags, sort_order)
+                          VALUES ${placeholders}`)
+                .bind(...params).run();
+            successCount += (result.meta && typeof result.meta.changes === 'number') ? result.meta.changes : chunk.length;
         }
-        return jsonResponse({ success: true, total: data.length, successCount, skipCount, errorCount: errors.length, errors: errors.slice(0, 10) });
+        await touchLinksEpoch(env, userId);
+        const skipCount = validItems.length - successCount;
+        return jsonResponse({ success: true, total: data.length, successCount, skipCount, invalidCount });
     } catch (e) {
         console.error('import failed', e);
         return errorResponse('批量导入失败', 500);
@@ -840,7 +898,7 @@ export async function onRequest(context) {
         if (path === '/api/links/import' && method === 'POST') return handleImport(request, env, userId);
         if (path.match(/^\/api\/links\/\d+$/) && method === 'PUT') return handlePutLink(request, env, userId, parseInt(path.split('/')[3]));
         if (path.match(/^\/api\/links\/\d+$/) && method === 'DELETE') return handleDeleteLink(request, env, userId, parseInt(path.split('/')[3]));
-        if (path === '/api/links' && method === 'GET') return handleGetLinks(request, env, userId);
+        if (path === '/api/links' && method === 'GET') return handleGetLinks(request, env, ctx, userId);
         if (path === '/api/links' && method === 'POST') return handlePostLinks(request, env, userId);
         if (path === '/api/tags' && method === 'GET') return handleGetTags(env, userId, ctx);
         if (path === '/api/tags/order' && method === 'GET') return handleGetTagOrder(env, userId);

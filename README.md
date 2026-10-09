@@ -130,14 +130,26 @@ CREATE TABLE IF NOT EXISTS tag_passwords (
     PRIMARY KEY (tag_name, user_id)
 );
 
+-- 列表缓存版本号表（链接每次写操作自增，用于精确失效边缘缓存）
+CREATE TABLE IF NOT EXISTS link_epochs (
+    user_id INTEGER PRIMARY KEY,
+    epoch INTEGER NOT NULL DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- 索引
 CREATE INDEX IF NOT EXISTS idx_links_user_id ON links(user_id);
 CREATE INDEX IF NOT EXISTS idx_links_user_sort ON links(user_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_tp_user ON tag_passwords(user_id);
+-- 注意是 (user_id, url) 而非单列 url：单列全局唯一会让第二个用户无法收藏与他人相同的网址
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_url ON links(user_id, url);
 
 -- 插入默认管理员（首次登录后请立即修改密码）
 INSERT OR IGNORE INTO users (username, password, role) VALUES ('admin', 'admin123', 'admin');
 ```
+
+> **已有部署建议执行 `migrations/0001_epoch_and_per_user_unique.sql`**（幂等，含执行前自检与执行后验证）。
+> **代码对执行顺序不敏感**：未执行时是安全降级——`link_epochs` 缺失 → 列表接口自动不走缓存；索引仍为全局唯一 → 他人已收藏过的网址你仍加不进去。两种情况都不会报错，只是拿不到收益。
 
 > ⚠️ 上面的默认口令 `admin123` 是**公开写在文档里的**，任何知道你的部署地址的人都能以此为管理员登录。部署完成后请立刻按"使用指南 → 管理员操作"改掉它，或直接在这条 INSERT 里换成你自己的强口令。
 
@@ -231,13 +243,13 @@ UPDATE users SET password = '你的新密码明文' WHERE username = 'admin';
 | 接口 | 方法 | 说明 |
 |------|------|------|
 | `/api/links` | GET | 获取当前用户链接（`?sort=sort_order&order=ASC`）。**未携带有效 `X-Tag-Grant` 时，被密码保护的标签下的链接由服务端剔除后返回**。响应只含渲染必需的列（不再返回 `created_at` / `updated_at`），`tags` 直接是数组，并带内容指纹 `ETag`；请求带 `If-None-Match` 且内容未变时返回 **304 空响应** |
-| `/api/links` | POST | 添加链接 |
+| `/api/links` | POST | 添加链接。网址撞唯一约束时返回 **409**（迁移前是全局唯一，迁移后是每用户唯一） |
 | `/api/links/:id` | PUT | 更新链接 |
 | `/api/links/:id` | DELETE | 删除链接 |
 | `/api/links/:id/sort` | PUT | 更新单个链接排序（`sort_order` 允许小数，供"插入相邻两项中间"使用） |
 | `/api/links/sort/batch` | PUT | 批量重排，body: `{items: [{id, sort_order}, ...]}`，一次事务写完，上限 2000 条。**仅在空隙用尽或排序值撞号时由前端调用** |
 | `/api/links/export` | GET | 导出当前用户全部链接 |
-| `/api/links/import` | POST | 批量导入（按 url 去重） |
+| `/api/links/import` | POST | 批量导入，单次上限 3000 条；按 `(user_id, url)` 由数据库去重，返回 `{successCount, skipCount, invalidCount}` |
 
 ### 标签
 
@@ -295,8 +307,6 @@ UPDATE users SET password = '你的新密码明文' WHERE username = 'admin';
 | 管理员权限 | 普通用户无法访问 `/api/admin/*` |
 
 > ⚠️ 已知未修复项：`PUT /api/admin/users/:name`（重置密码）与 `DELETE /api/admin/users/:name`（删除用户）后端路由未实现，会返回 405；`POST /api/links/:id/click`、`/api/links/:id/icon` 同样不存在，因此 `click_count` 恒为 0，界面上的"点击量"排序当前无效。
-
-> ⚠️ `links.url` 上有 `UNIQUE` 索引且**跨用户生效**，第二个用户无法收藏与他人相同的网址。修复方式：`DROP INDEX idx_unique_url; CREATE UNIQUE INDEX idx_unique_url ON links(user_id, url);`
 
 ---
 

@@ -93,7 +93,7 @@ const API = {
 
   async importLinks(items) {
     if (!Array.isArray(items) || items.length === 0) throw new Error('数据格式错误，需要非空数组');
-    if (items.length > 2000) throw new Error('单次导入不能超过2000条');
+    if (items.length > 3000) throw new Error('单次导入不能超过3000条');
     return await apiCall('POST', '/api/links/import', items);
   },
 
