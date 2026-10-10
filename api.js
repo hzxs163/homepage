@@ -58,6 +58,9 @@ async function apiCall(method, path, body = null, options = {}) {
     throw new Error(data.error || '请求失败');
   }
 
+  // 本页面写过的东西会让服务端版本号自增，标记一下，别让轮询把它当成"别处的改动"再刷一遍
+  if (method !== 'GET' && typeof markSelfWrite === 'function') markSelfWrite();
+
   if (options.withMeta) {
     return {
       notModified: false,
@@ -81,7 +84,8 @@ const API = {
     return await apiCall('GET', path, null, { withMeta: true, ifNoneMatch: etag });
   },
   addLink: async (link) => await apiCall('POST', '/api/links', link),
-  updateLink: async (id, link) => await apiCall('PUT', '/api/links/' + id, link),
+  // 只回列表版本号，用来发现"别处新增/改过收藏"；不碰 links 表
+  getLinksEpoch: async () => await apiCall('GET', '/api/links/epoch'),  updateLink: async (id, link) => await apiCall('PUT', '/api/links/' + id, link),
   deleteLink: async (id) => await apiCall('DELETE', '/api/links/' + id),
   updateSort: async (id, sort_order) => await apiCall('PUT', `/api/links/${id}/sort`, { sort_order }),
   // 仅在"空隙用尽、需要整体重排"时使用；常规拖动走 updateSort 单条

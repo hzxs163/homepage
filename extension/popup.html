@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>收藏到我的导航</title>
+<style>
+  body { width: 300px; margin: 0; padding: 14px; font: 13px/1.6 system-ui, "Microsoft YaHei", sans-serif; color: #1f2937; background: #fff; }
+  h1 { font-size: 14px; margin: 0 0 10px; }
+  label { display: block; margin: 8px 0 3px; color: #6b7280; font-size: 12px; }
+  input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; }
+  button { width: 100%; margin-top: 10px; padding: 7px 0; border: none; border-radius: 6px; background: #00b866; color: #fff; font-size: 13px; cursor: pointer; }
+  button.ghost { background: #f3f4f6; color: #4b5563; }
+  .state { padding: 8px 10px; border-radius: 8px; background: #f0fdf4; color: #166534; font-size: 12px; word-break: break-all; }
+  .state.off { background: #fef2f2; color: #991b1b; }
+  .hint { margin-top: 10px; color: #6b7280; font-size: 12px; }
+  .row { display: flex; gap: 8px; }
+  .row button { margin-top: 8px; }
+</style>
+</head>
+<body>
+  <h1>⭐ 收藏到我的导航</h1>
+  <div class="state off" id="state">读取中...</div>
+
+  <div id="loginBox">
+    <label>站点地址</label>
+    <input type="text" id="navBase" placeholder="https://homepage-a8a.pages.dev">
+    <label>用户名</label>
+    <input type="text" id="username" autocomplete="username">
+    <label>密码</label>
+    <input type="password" id="password" autocomplete="current-password">
+    <button id="loginBtn">登录并启用右键收藏</button>
+  </div>
+
+  <div class="row" id="loggedBox" style="display:none">
+    <button id="refreshBtn" class="ghost">刷新标签菜单</button>
+    <button id="logoutBtn" class="ghost">退出登录</button>
+  </div>
+
+  <div class="hint" id="last"></div>
+  <div class="hint">用法：在任意网页右键 → 「⭐ 收藏到我的导航」→ 选「直接收藏」或某个标签。收藏过的网址导航页最迟 1 分钟内自动出现，不用手动刷新。</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

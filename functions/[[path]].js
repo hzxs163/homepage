@@ -488,6 +488,14 @@ async function handleGetLinks(request, env, ctx, userId) {
     }
 }
 
+// 给前端轮询"有没有新收藏"用：只回版本号，不碰 links 表
+async function handleLinksEpoch(env, userId) {
+    const epoch = await readLinksEpoch(env, userId);
+    return new Response(JSON.stringify({ epoch }), {
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }
+    });
+}
+
 async function handlePostLinks(request, env, userId) {
     let body;
     try {
@@ -929,6 +937,7 @@ export async function onRequest(context) {
             return handleSort(request, env, userId, parseInt(path.split('/')[3]));
         }
         if (path === '/api/links/export' && method === 'GET') return handleExport(request, env, userId);
+        if (path === '/api/links/epoch' && method === 'GET') return handleLinksEpoch(env, userId);
         if (path === '/api/links/import' && method === 'POST') return handleImport(request, env, userId);
         if (path.match(/^\/api\/links\/\d+$/) && method === 'PUT') return handlePutLink(request, env, userId, parseInt(path.split('/')[3]));
         if (path.match(/^\/api\/links\/\d+$/) && method === 'DELETE') return handleDeleteLink(request, env, userId, parseInt(path.split('/')[3]));

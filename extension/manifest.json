@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "收藏到我的导航",
+  "version": "1.0.0",
+  "description": "在任意网页右键，把当前页面或当前链接一键收藏进自己的导航站，可选标签。",
+  "permissions": ["contextMenus", "storage", "alarms", "tabs"],
+  "host_permissions": [
+    "https://homepage-a8a.pages.dev/*",
+    "https://kkkm.eu.cc/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "收藏到我的导航"
+  }
+}

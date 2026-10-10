@@ -1487,6 +1487,7 @@ async function initApp() {
   }
   initKeyboardShortcuts();
   initAutoLock();
+  initEpochWatch();
 }
 ((window.initApp = initApp),
   document.addEventListener("DOMContentLoaded", function () {
@@ -1891,6 +1892,52 @@ function initAutoLock() {
   markActivity();
   if (autoLockTimer) clearInterval(autoLockTimer);
   autoLockTimer = setInterval(applyIdleLock, AUTO_LOCK_CHECK_MS);
+}
+
+// 极轻轮询：只问"列表版本号变了没"，变了才去重新拉列表。
+// 用于让扩展/手机等别处的收藏自动出现在已经打开的页面上。
+const EPOCH_POLL_MS = 60000;
+let seenEpoch = null;
+let epochTimer = null;
+let epochFromSelf = false;
+
+function markSelfWrite() {
+  epochFromSelf = true;
+}
+
+async function pollLinksEpoch() {
+  if (document.visibilityState !== 'visible') return;
+  let latest;
+  try {
+    const r = await API.getLinksEpoch();
+    latest = r && typeof r.epoch === 'number' ? r.epoch : null;
+  } catch (e) {
+    return; // 轮询失败不打扰用户，等下一轮
+  }
+  if (latest === null) return; // 服务端没有 link_epochs，轮询无意义
+  if (seenEpoch === null) {
+    seenEpoch = latest;
+    return;
+  }
+  if (latest === seenEpoch) return;
+  seenEpoch = latest;
+  if (epochFromSelf) {
+    epochFromSelf = false;
+    return;
+  }
+  const [sort, order] = currentSort();
+  await loadLinks(sort, order);
+  showToast('别处改过收藏，已刷新');
+}
+
+function initEpochWatch() {
+  if (epochTimer) clearInterval(epochTimer);
+  epochTimer = setInterval(pollLinksEpoch, EPOCH_POLL_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') pollLinksEpoch();
+  });
+  // 先把基线记下来，否则第一次真正的检查要再等一个周期
+  pollLinksEpoch();
 }
 
 async function setTagPassword(tagName, password) {
